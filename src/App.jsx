@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
 
-// Import komponen yang telah dipecah
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import DashboardContent from "./components/DashboardContent";
 import LoginForm from "./components/LoginForm";
 import CreateRequestForm from "./components/CreateRequestForm";
+import MyRequests from "./components/MyRequests";
 
 const App = () => {
   const { session, loading } = useAuth();
@@ -20,8 +20,10 @@ const App = () => {
     return <LoginForm />;
   }
 
-  const headerTitle = activeMenu.includes("Permintaan")
+  const headerTitle = activeMenu.includes("Permintaan Baru")
     ? "Buat Permintaan Desain"
+    : activeMenu.includes("Daftar Permintaan")
+    ? "Daftar Permintaan Saya"
     : activeMenu.includes("Persetujuan")
     ? "Daftar Persetujuan"
     : activeMenu;
@@ -38,8 +40,11 @@ const App = () => {
 
           {activeMenu === "Buat Permintaan Baru" && <CreateRequestForm />}
 
+          {activeMenu === "Daftar Permintaan Saya" && <MyRequests />}
+
           {activeMenu !== "Dashboard" &&
-            activeMenu !== "Buat Permintaan Baru" && (
+            activeMenu !== "Buat Permintaan Baru" &&
+            activeMenu !== "Daftar Permintaan Saya" && (
               <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
                 <h1 className="text-2xl font-bold text-gray-800">
                   Halaman {activeMenu}

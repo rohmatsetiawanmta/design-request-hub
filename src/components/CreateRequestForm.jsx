@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { createRequest } from "../supabaseClient";
+import { createRequest, uploadReferenceFile } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 
 const initialFormState = {
@@ -46,20 +46,37 @@ const CreateRequestForm = () => {
       return;
     }
 
+    let fileUrl = null;
+
     try {
+      if (formData.referenceFile) {
+        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+        if (formData.referenceFile.size > MAX_FILE_SIZE) {
+          throw new Error("Ukuran file melebihi batas maksimum 5MB.");
+        }
+
+        fileUrl = await uploadReferenceFile(formData.referenceFile, user.id);
+        console.log("File referensi berhasil diunggah:", fileUrl);
+      }
+
       const requestData = {
-        ...formData,
-        reference_url: null,
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        deadline: formData.deadline,
+        reference_url: fileUrl,
       };
 
       const newRequest = await createRequest(requestData, user.id);
       setSuccessMsg(
         `Permintaan "${newRequest.title}" berhasil dibuat dengan status Submitted.`
       );
-      setFormData(initialFormState); // Reset form
+      setFormData(initialFormState);
     } catch (error) {
       console.error("Gagal membuat permintaan:", error);
-      setErrorMsg(`Gagal membuat permintaan: ${error.message}`);
+      setErrorMsg(
+        `Gagal membuat permintaan: ${error.message || error.toString()}`
+      );
     } finally {
       setLoading(false);
     }
@@ -83,7 +100,6 @@ const CreateRequestForm = () => {
       )}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
-        {/* Judul */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Judul Permintaan <span className="text-red-500">*</span>
@@ -99,7 +115,6 @@ const CreateRequestForm = () => {
           />
         </div>
 
-        {/* Deskripsi */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Deskripsi Singkat
@@ -115,7 +130,6 @@ const CreateRequestForm = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {/* Kategori */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Kategori Desain <span className="text-red-500">*</span>
@@ -136,7 +150,6 @@ const CreateRequestForm = () => {
             </select>
           </div>
 
-          {/* Tenggat Waktu */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Tenggat Waktu <span className="text-red-500">*</span>
@@ -153,7 +166,6 @@ const CreateRequestForm = () => {
           </div>
         </div>
 
-        {/* Unggah Referensi */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Unggah Referensi Desain (Opsional)
@@ -169,7 +181,6 @@ const CreateRequestForm = () => {
           </p>
         </div>
 
-        {/* Tombol Submit */}
         <button
           type="submit"
           className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"

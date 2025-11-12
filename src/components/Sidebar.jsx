@@ -6,6 +6,7 @@ import {
   ClipboardList,
   BarChart,
   Users,
+  ListOrdered,
 } from "lucide-react";
 import { useAuth } from "../AuthContext"; // Import useAuth untuk mendapatkan peran
 
@@ -17,6 +18,7 @@ const iconMap = {
   ClipboardList: ClipboardList,
   BarChart: BarChart,
   Users: Users,
+  ListOrdered: ListOrdered,
 };
 
 // Komponen Ikon sederhana
@@ -36,7 +38,10 @@ const menuGroups = [
   {
     title: "Design Request",
     allowedRoles: ["REQUESTER", "ADMIN", "MANAGEMENT", "PRODUCER"],
-    items: [{ name: "Buat Permintaan Baru", icon: "PlusCircle" }],
+    items: [
+      { name: "Buat Permintaan Baru", icon: "PlusCircle" },
+      { name: "Daftar Permintaan Saya", icon: "ListOrdered" },
+    ],
   },
   {
     title: "Workflow & Tugas",

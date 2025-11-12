@@ -43,6 +43,29 @@ export async function getUserProfile(userId) {
   return data || null;
 }
 
+export async function uploadReferenceFile(file, userId) {
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+  const filePath = `${userId}/${fileName}`;
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from("reference-files")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from("reference-files")
+    .getPublicUrl(uploadData.path);
+
+  return publicUrlData.publicUrl;
+}
+
 export async function createRequest(requestData, requesterId) {
   const { title, description, category, deadline, reference_url } = requestData;
 
@@ -56,6 +79,33 @@ export async function createRequest(requestData, requesterId) {
       deadline,
       reference_url,
     })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchMyRequests(userId) {
+  const { data, error } = await supabase
+    .from("requests")
+    .select("*") // Ambil semua field
+    .eq("requester_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function updateRequest(requestId, updates) {
+  const { data, error } = await supabase
+    .from("requests")
+    .update(updates)
+    .eq("request_id", requestId)
     .select()
     .single();
 
