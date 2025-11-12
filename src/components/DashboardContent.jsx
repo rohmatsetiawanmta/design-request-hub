@@ -3,6 +3,7 @@ import MetricCard from "./MetricCard";
 import {
   fetchDashboardData,
   fetchActiveRequestsForTable,
+  fetchDesigners,
 } from "../supabaseClient";
 
 const getStatusColor = (status) => {
@@ -25,8 +26,23 @@ const getStatusColor = (status) => {
 const DashboardContent = () => {
   const [metrics, setMetrics] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
+  const [designersList, setDesignersList] = useState([]);
+  const [allRequestsData, setAllRequestsData] = useState([]); // <-- State untuk data mentah yang difilter
+  const [filters, setFilters] = useState({
+    category: "All",
+    designerId: "",
+    startDate: "",
+    endDate: "",
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const categories = ["All", "Graphic", "Motion", "Game UI", "Other"];
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  };
 
   const calculateMetrics = (data) => {
     const totalRequests = data.length;
@@ -44,7 +60,7 @@ const DashboardContent = () => {
       {
         title: "Total Requests",
         value: totalRequests,
-        detail: "Total permintaan tahun ini",
+        detail: "Total permintaan yang sesuai filter",
         color: "blue",
       },
       {
@@ -68,11 +84,72 @@ const DashboardContent = () => {
     ];
   };
 
+  // FUNGSI BARU: Export Data ke CSV (Merespon Kesenjangan Pengunduhan Laporan)
+  const exportToCsv = (data, filename) => {
+    if (data.length === 0) {
+      alert("Tidak ada data untuk diekspor.");
+      return;
+    }
+
+    // Tentukan header laporan
+    const headers = [
+      "request_id",
+      "title",
+      "category",
+      "deadline",
+      "status",
+      "designer_name",
+    ];
+
+    // Map data ke baris CSV
+    const rows = data.map((req) => [
+      req.request_id,
+      req.title,
+      req.category,
+      new Date(req.deadline).toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+      req.status,
+      req.designers ? req.designers.full_name : "Belum Ditugaskan",
+    ]);
+
+    // Gabungkan header dan baris dengan pemisah semicolon (;)
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map((e) => e.join(";")),
+    ].join("\n");
+
+    // Pemicu pengunduhan
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const loadDashboardData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const allRequests = await fetchDashboardData();
+      // 1. Ambil daftar desainer untuk filter
+      const designerData = await fetchDesigners();
+      setDesignersList(designerData);
+
+      // 2. Ambil data dashboard dengan filter yang diterapkan
+      const allRequests = await fetchDashboardData(filters);
+
+      // Simpan data mentah yang sudah difilter
+      setAllRequestsData(allRequests);
+
+      // 3. Ambil data tabel aktif
       const activeTableData = await fetchActiveRequestsForTable();
 
       setMetrics(calculateMetrics(allRequests));
@@ -89,7 +166,12 @@ const DashboardContent = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [
+    filters.category,
+    filters.designerId,
+    filters.startDate,
+    filters.endDate,
+  ]);
 
   const totalActiveItems =
     metrics.find((m) => m.title === "In Progress")?.value || 0;
@@ -112,19 +194,118 @@ const DashboardContent = () => {
 
   return (
     <div className="space-y-8">
+      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">
+          Filter Laporan
+        </h2>
+        <div className="grid grid-cols-5 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Kategori
+            </label>
+            <select
+              name="category"
+              value={filters.category}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Desainer
+            </label>
+            <select
+              name="designerId"
+              value={filters.designerId}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            >
+              <option value="">Semua Desainer</option>
+              {designersList.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Dari Tanggal Dibuat
+            </label>
+            <input
+              type="date"
+              name="startDate"
+              value={filters.startDate}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Sampai Tanggal Dibuat
+            </label>
+            <input
+              type="date"
+              name="endDate"
+              value={filters.endDate}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={() =>
+                setFilters({
+                  category: "All",
+                  designerId: "",
+                  startDate: "",
+                  endDate: "",
+                })
+              }
+              className="w-full px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+            >
+              Reset Filter
+            </button>
+          </div>
+        </div>
+      </div>
+      {/* End UI Filter */}
+
       <div className="grid grid-cols-4 gap-6">
         {metrics.map((metric) => (
           <MetricCard key={metric.title} {...metric} />
         ))}
       </div>
 
+      {/* Tombol Unduh Laporan (Addressing FR-15 - Export functionality) */}
+      <div className="flex justify-end pt-4">
+        <button
+          onClick={() =>
+            exportToCsv(
+              allRequestsData,
+              `Report_DesignHub_${new Date().toISOString().slice(0, 10)}.csv`
+            )
+          }
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          disabled={loading || allRequestsData.length === 0}
+        >
+          Unduh Laporan Data Mentah ({allRequestsData.length} Item)
+        </button>
+      </div>
+
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800">
-            Daftar Permintaan Aktif
+            Daftar Permintaan Aktif (Top 5)
           </h2>
           <button className="text-sm font-medium text-purple-600 hover:text-purple-700">
-            Lihat Semua ({totalActiveItems} Item)
+            Lihat Semua ({totalActiveItems} Item Sesuai Filter)
           </button>
         </div>
 
@@ -156,9 +337,7 @@ const DashboardContent = () => {
                     {req.title}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {req.designers
-                      ? req.designers.full_name
-                      : "Belum Ditugaskan"}
+                    {req.designer ? req.designer.full_name : "Belum Ditugaskan"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span

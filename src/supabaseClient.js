@@ -1,3 +1,5 @@
+// src/supabaseClient.js
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -138,20 +140,24 @@ export async function updateRequest(requestId, updates) {
   return data;
 }
 
+// --------------------------------------------------------------------------------
+// FUNGSI UNTUK REVIEW/FEEDBACK/COMPLETE (UC-08 & UC-10)
+// --------------------------------------------------------------------------------
 export async function submitReviewAndChangeStatus(
   requestId,
   commenterId,
-  versionNo,
-  feedbackText,
-  newStatus
+  versionNo, // Versi desain yang sedang di-review
+  feedbackText, // Catatan (bisa kosong untuk Complete)
+  newStatus // Status baru: "Revision" atau "Completed"
 ) {
+  // 1. Catat feedback ke tabel 'feedback' HANYA JIKA ada teks komentar
   if (feedbackText && feedbackText.trim() !== "") {
     const { error: feedbackError } = await supabase.from("feedback").insert({
       request_id: requestId,
       version_no: versionNo,
       commenter_id: commenterId,
       feedback_text: feedbackText.trim(),
-      status_change: newStatus,
+      status_change: newStatus, // Mencatat outcome review (Revision/Completed)
     });
 
     if (feedbackError) {
@@ -160,6 +166,7 @@ export async function submitReviewAndChangeStatus(
     }
   }
 
+  // 2. Perbarui status permintaan di tabel 'requests'
   const updates = { status: newStatus };
 
   const { data, error: updateError } = await supabase
@@ -178,6 +185,35 @@ export async function submitReviewAndChangeStatus(
 
   return data;
 }
+// --------------------------------------------------------------------------------
+// FUNGSI SIMULASI UC-12: Save QC Report
+export async function saveQCReport(reportData) {
+  // Simulates saving a QC report based on AI findings (OCR/NLP/CV)
+  // Asumsi tabel 'qc_reports' ada di database (sesuai ERD/Class Diagram).
+  const { error } = await supabase.from("qc_reports").insert(reportData);
+
+  if (error) {
+    console.error("Error saving QC Report:", error);
+    // Asumsi: Error ini ditoleransi agar alur utama tidak terhenti jika tabel belum ada.
+  }
+  return true;
+}
+
+// FUNGSI SIMULASI UC-14: Archive Final Design
+export async function archiveDesign(requestId, finalDesignUrl) {
+  // Simulates the archiving process (UC-14) after completion
+  // Asumsi tabel 'archive' ada di database (sesuai ERD/Class Diagram).
+  const { error } = await supabase.from("archive").insert({
+    request_id: requestId,
+    archive_url: finalDesignUrl, // Store final public URL
+  });
+
+  if (error) {
+    console.error("Error archiving design:", error);
+    // Asumsi: Error ini ditoleransi agar alur utama tidak terhenti jika tabel belum ada.
+  }
+  return true;
+}
 
 export async function fetchDesigners() {
   const { data, error } = await supabase
@@ -190,6 +226,44 @@ export async function fetchDesigners() {
   }
   return data;
 }
+
+// --------------------------------------------------------------------------------
+// FUNGSI MODIFIKASI UC-11: Menerima Filter
+// --------------------------------------------------------------------------------
+export async function fetchDashboardData(filters = {}) {
+  let query = supabase
+    .from("requests")
+    .select(
+      "request_id, title, category, deadline, status, designer_id, designers:users!designer_id(full_name)"
+    )
+    .order("created_at", { ascending: false });
+
+  // Implementasi filter sederhana (FR-15)
+  if (filters.category && filters.category !== "All") {
+    query = query.eq("category", filters.category);
+  }
+
+  if (filters.designerId) {
+    query = query.eq("designer_id", filters.designerId);
+  }
+
+  // Catatan: Supabase perlu timestamp, tapi di sini menggunakan format date string sederhana
+  if (filters.startDate) {
+    query = query.gte("created_at", filters.startDate);
+  }
+
+  if (filters.endDate) {
+    query = query.lte("created_at", filters.endDate);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+// --------------------------------------------------------------------------------
 
 export async function fetchRequestsForApproval() {
   const approvalStatuses = ["Submitted"];
@@ -239,20 +313,6 @@ export async function fetchMyTasks(designerId) {
     .eq("designer_id", designerId)
     .in("status", activeStatuses)
     .order("deadline", { ascending: true });
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-
-export async function fetchDashboardData() {
-  const { data, error } = await supabase
-    .from("requests")
-    .select(
-      "request_id, title, category, deadline, status, designer_id, designers:users!designer_id(full_name)"
-    )
-    .order("created_at", { ascending: false });
 
   if (error) {
     throw error;
