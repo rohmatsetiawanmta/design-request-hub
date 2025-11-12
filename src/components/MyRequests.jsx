@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { fetchMyRequests } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import EditRequestModal from "./EditRequestModal";
-import { Edit } from "lucide-react";
+import ReviewRequestModal from "./ReviewRequestModal";
+import { Edit, Eye } from "lucide-react";
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -29,7 +30,8 @@ const MyRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [selectedRequestToEdit, setSelectedRequestToEdit] = useState(null);
+  const [selectedRequestToReview, setSelectedRequestToReview] = useState(null);
   const [infoMsg, setInfoMsg] = useState(null);
 
   const loadRequests = async () => {
@@ -53,6 +55,8 @@ const MyRequests = () => {
 
   const handleSuccess = (message) => {
     setInfoMsg(message);
+    setSelectedRequestToEdit(null);
+    setSelectedRequestToReview(null);
     loadRequests();
   };
 
@@ -71,6 +75,7 @@ const MyRequests = () => {
   }
 
   const isEditable = (status) => status === "Submitted";
+  const isReviewable = (status) => status === "For Review";
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
@@ -78,8 +83,9 @@ const MyRequests = () => {
         Daftar Permintaan Saya ({requests.length})
       </h1>
       <p className="mb-6 text-gray-600">
-        Anda dapat mengedit atau membatalkan permintaan yang masih berstatus{" "}
-        <strong>Submitted</strong>.
+        Anda dapat mengedit/membatalkan permintaan berstatus{" "}
+        <strong>Submitted</strong> atau meninjau hasil desain berstatus{" "}
+        <strong>For Review</strong>.
       </p>
 
       {infoMsg && (
@@ -116,7 +122,7 @@ const MyRequests = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {requests.map((req) => (
-                <tr key={req.id} className="hover:bg-gray-50">
+                <tr key={req.request_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {req.title}
                   </td>
@@ -140,9 +146,18 @@ const MyRequests = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {isEditable(req.status) ? (
+                    {isReviewable(req.status) ? (
                       <button
-                        onClick={() => setSelectedRequest(req)}
+                        onClick={() => setSelectedRequestToReview(req)}
+                        className="text-blue-600 hover:text-blue-900 disabled:opacity-50 inline-flex items-center space-x-1"
+                        title="Tinjau dan Beri Feedback"
+                      >
+                        <Eye className="w-5 h-5 inline-block" />
+                        <span>Review</span>
+                      </button>
+                    ) : isEditable(req.status) ? (
+                      <button
+                        onClick={() => setSelectedRequestToEdit(req)}
                         className="text-purple-600 hover:text-purple-900 disabled:opacity-50"
                         title="Edit atau Batalkan Permintaan"
                       >
@@ -159,16 +174,25 @@ const MyRequests = () => {
         </div>
       )}
 
-      {selectedRequest && isEditable(selectedRequest.status) && (
+      {selectedRequestToEdit && isEditable(selectedRequestToEdit.status) && (
         <EditRequestModal
-          request={selectedRequest}
+          request={selectedRequestToEdit}
           onClose={() => {
-            setSelectedRequest(null);
+            setSelectedRequestToEdit(null);
             setInfoMsg(null);
           }}
           onSuccess={handleSuccess}
         />
       )}
+
+      {selectedRequestToReview &&
+        isReviewable(selectedRequestToReview.status) && (
+          <ReviewRequestModal
+            request={selectedRequestToReview}
+            onClose={() => setSelectedRequestToReview(null)}
+            onSuccess={handleSuccess}
+          />
+        )}
     </div>
   );
 };

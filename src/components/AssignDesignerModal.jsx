@@ -3,7 +3,7 @@ import { UserCheck } from "lucide-react";
 
 /**
  * Modal untuk memilih dan menugaskan Designer ke Request yang sudah di-Approved.
- * Memicu fungsi onAssign di parent (ApprovalList.jsx).
+ * (UC-06: Assign Designer)
  */
 const AssignDesignerModal = ({
   request,

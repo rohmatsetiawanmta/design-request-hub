@@ -252,3 +252,37 @@ export async function fetchActiveRequestsForTable() {
   }
   return data;
 }
+
+export async function submitFeedbackAndRequestRevision(
+  requestId,
+  commenterId,
+  versionNo,
+  feedbackText
+) {
+  const { error: feedbackError } = await supabase.from("feedback").insert({
+    request_id: requestId,
+    version_no: versionNo,
+    commenter_id: commenterId,
+    feedback_text: feedbackText,
+    status_change: "Revision",
+  });
+
+  if (feedbackError) {
+    console.error("Error saving feedback:", feedbackError);
+    throw new Error("Gagal menyimpan umpan balik.");
+  }
+
+  const { data, error: updateError } = await supabase
+    .from("requests")
+    .update({ status: "Revision" })
+    .eq("request_id", requestId)
+    .select()
+    .single();
+
+  if (updateError) {
+    console.error("Error updating request status:", updateError);
+    throw new Error("Gagal memperbarui status permintaan menjadi Revision.");
+  }
+
+  return data;
+}
