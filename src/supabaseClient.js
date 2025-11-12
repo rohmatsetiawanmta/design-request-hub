@@ -115,6 +115,34 @@ export async function updateRequest(requestId, updates) {
   return data;
 }
 
+export async function fetchRequestsForApproval() {
+  const approvalStatuses = ["Submitted"];
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      `
+      request_id, 
+      title, 
+      category, 
+      deadline, 
+      status, 
+      description,
+      reference_url,
+      requester_info:users!requester_id ( 
+          full_name
+      )
+    `
+    )
+    .in("status", approvalStatuses)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
 export async function fetchDashboardData() {
   const { data, error } = await supabase
     .from("requests")

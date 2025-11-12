@@ -139,7 +139,7 @@ const CreateRequestForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Deskripsi Singkat
+            Deskripsi/Brief Singkat
           </label>
           <textarea
             name="description"
