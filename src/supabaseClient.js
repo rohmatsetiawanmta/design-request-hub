@@ -138,6 +138,47 @@ export async function updateRequest(requestId, updates) {
   return data;
 }
 
+export async function submitReviewAndChangeStatus(
+  requestId,
+  commenterId,
+  versionNo,
+  feedbackText,
+  newStatus
+) {
+  if (feedbackText && feedbackText.trim() !== "") {
+    const { error: feedbackError } = await supabase.from("feedback").insert({
+      request_id: requestId,
+      version_no: versionNo,
+      commenter_id: commenterId,
+      feedback_text: feedbackText.trim(),
+      status_change: newStatus,
+    });
+
+    if (feedbackError) {
+      console.error("Error saving feedback:", feedbackError);
+      throw new Error("Gagal menyimpan umpan balik.");
+    }
+  }
+
+  const updates = { status: newStatus };
+
+  const { data, error: updateError } = await supabase
+    .from("requests")
+    .update(updates)
+    .eq("request_id", requestId)
+    .select()
+    .single();
+
+  if (updateError) {
+    console.error("Error updating request status:", updateError);
+    throw new Error(
+      `Gagal memperbarui status permintaan menjadi ${newStatus}.`
+    );
+  }
+
+  return data;
+}
+
 export async function fetchDesigners() {
   const { data, error } = await supabase
     .from("users")
@@ -250,39 +291,5 @@ export async function fetchActiveRequestsForTable() {
     console.error("Error fetching active requests for table:", error);
     throw error;
   }
-  return data;
-}
-
-export async function submitFeedbackAndRequestRevision(
-  requestId,
-  commenterId,
-  versionNo,
-  feedbackText
-) {
-  const { error: feedbackError } = await supabase.from("feedback").insert({
-    request_id: requestId,
-    version_no: versionNo,
-    commenter_id: commenterId,
-    feedback_text: feedbackText,
-    status_change: "Revision",
-  });
-
-  if (feedbackError) {
-    console.error("Error saving feedback:", feedbackError);
-    throw new Error("Gagal menyimpan umpan balik.");
-  }
-
-  const { data, error: updateError } = await supabase
-    .from("requests")
-    .update({ status: "Revision" })
-    .eq("request_id", requestId)
-    .select()
-    .single();
-
-  if (updateError) {
-    console.error("Error updating request status:", updateError);
-    throw new Error("Gagal memperbarui status permintaan menjadi Revision.");
-  }
-
   return data;
 }

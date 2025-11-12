@@ -1,17 +1,19 @@
 import React, { useState } from "react";
-import {
-  submitFeedbackAndRequestRevision,
-  updateRequest,
-} from "../supabaseClient";
+import { submitReviewAndChangeStatus } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import { X, ExternalLink, Send } from "lucide-react";
 
+/**
+ * Modal untuk Requester/Reviewer memberikan feedback/revisi (UC-08)
+ * atau menyelesaikan permintaan (UC-10).
+ */
 const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
   const { user } = useAuth();
   const [feedbackText, setFeedbackText] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // UC-08: Menangani permintaan revisi (Revision)
   const handleRevision = async () => {
     setErrorMsg("");
     if (!feedbackText.trim()) {
@@ -24,11 +26,12 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
 
     try {
       // Panggil fungsi yang menyimpan feedback dan mengubah status menjadi Revision
-      await submitFeedbackAndRequestRevision(
+      await submitReviewAndChangeStatus(
         request.request_id,
         user.id,
         request.version_no || 1, // Mengambil nomor versi desain yang sedang di-review
-        feedbackText.trim()
+        feedbackText.trim(),
+        "Revision" // Status baru
       );
 
       onSuccess(
@@ -59,8 +62,15 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
     setErrorMsg("");
 
     try {
-      // Update status menjadi 'Completed'
-      await updateRequest(request.request_id, { status: "Completed" });
+      // Menggunakan fungsi submitReviewAndChangeStatus untuk menyimpan catatan (jika ada) dan mengubah status
+      await submitReviewAndChangeStatus(
+        request.request_id,
+        user.id,
+        request.version_no || 1,
+        feedbackText.trim(), // Catatan opsional akan dicatat jika ada
+        "Completed" // Status baru
+      );
+
       onSuccess(
         `Permintaan "${request.title}" berhasil diselesaikan (Completed).`
       );
@@ -124,10 +134,7 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Umpan Balik / Catatan Revisi
-              <span className="text-gray-400">
-                {" "}
-                (Wajib diisi jika meminta revisi)
-              </span>
+              <span className="text-gray-400"> (Opsional - akan dicatat)</span>
             </label>
             <textarea
               value={feedbackText}
@@ -135,7 +142,7 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
               rows="4"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
               disabled={loading}
-              placeholder="Masukkan detail revisi yang diperlukan di sini. Kosongkan jika Anda langsung ingin menyelesaikan permintaan."
+              placeholder="Masukkan detail revisi yang diperlukan di sini, atau catatan persetujuan jika mengklik Complete."
             />
           </div>
 

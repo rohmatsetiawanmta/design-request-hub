@@ -127,9 +127,7 @@ const MyTasks = () => {
                     <div className="text-xs text-gray-500">{task.category}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {task.requester && task.requester.length > 0
-                      ? task.requester[0].full_name
-                      : "N/A"}
+                    {task.requester ? task.requester.full_name : "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(task.deadline).toLocaleDateString("id-ID", {
