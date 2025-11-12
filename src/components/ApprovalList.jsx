@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { fetchRequestsForApproval, updateRequest } from "../supabaseClient";
-import { Check, X, Eye } from "lucide-react";
+import {
+  fetchRequestsForApproval,
+  updateRequest,
+  fetchDesigners,
+} from "../supabaseClient";
+import { Check, X, Eye, UserCheck } from "lucide-react";
 import RequestPreviewModal from "./RequestPreviewModal";
+import AssignDesignerModal from "./AssignDesignerModal"; // <-- Import Komponen yang Dipisah
 
 const getStatusColor = (status) => {
   switch (status) {
     case "Submitted":
       return "bg-yellow-100 text-yellow-800";
     case "Approved":
-      return "bg-green-100 text-green-800";
+    case "In Progress":
+      return "bg-purple-100 text-purple-800";
+    case "For Review":
+      return "bg-blue-100 text-blue-800";
     case "Revision":
       return "bg-red-100 text-red-800";
+    case "Completed":
+      return "bg-green-100 text-green-800";
     default:
       return "bg-gray-100 text-gray-800";
   }
@@ -18,19 +28,24 @@ const getStatusColor = (status) => {
 
 const ApprovalList = () => {
   const [requests, setRequests] = useState([]);
+  const [designers, setDesigners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [infoMsg, setInfoMsg] = useState(null);
   const [processingId, setProcessingId] = useState(null);
   const [selectedRequestToPreview, setSelectedRequestToPreview] =
     useState(null);
+  const [requestToAssign, setRequestToAssign] = useState(null);
 
   const loadRequests = async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await fetchRequestsForApproval();
+      const designerData = await fetchDesigners();
+
       setRequests(data);
+      setDesigners(designerData);
     } catch (err) {
       console.error("Gagal memuat permintaan persetujuan:", err);
       setError(
@@ -45,31 +60,61 @@ const ApprovalList = () => {
     loadRequests();
   }, []);
 
+  // --- FUNGSI UC-06: Menangani Penugasan Final (Logika Inti Tetap di Parent) ---
+  const handleAssignment = async (requestId, designerId) => {
+    setProcessingId(requestId);
+    setRequestToAssign(null);
+
+    try {
+      // 1. Update status menjadi Approved & designer_id (FR-05, FR-06)
+      await updateRequest(requestId, {
+        status: "Approved",
+        designer_id: designerId,
+      });
+
+      // 2. Notifikasi (FR-16 - client side only)
+      const assignedDesigner =
+        designers.find((d) => d.id === designerId)?.full_name || "Desainer";
+      setInfoMsg(
+        `Permintaan berhasil disetujui dan ditugaskan ke ${assignedDesigner}.`
+      );
+
+      loadRequests();
+    } catch (error) {
+      console.error("Gagal menugaskan:", error);
+      setError(`Gagal menugaskan. ${error.message || error.toString()}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // --- FUNGSI UC-05: Menangani Aksi Approve/Revision ---
   const handleAction = async (requestId, actionType) => {
+    if (actionType === "approve") {
+      // Memicu modal penugasan (UC-06)
+      const req = requests.find((r) => r.request_id === requestId);
+      if (req) {
+        setRequestToAssign(req);
+      }
+      return;
+    }
+
+    // Alur untuk Revision (FR-04 Alternate Flow)
     setProcessingId(requestId);
     setInfoMsg(null);
-    let newStatus;
-    let successMessage;
-
-    if (actionType === "approve") {
-      newStatus = "Approved";
-      successMessage = "Permintaan berhasil disetujui (Approved).";
-    } else {
-      if (
-        !window.confirm(
-          "Yakin ingin mengembalikan permintaan ini untuk direvisi?"
-        )
-      ) {
-        setProcessingId(null);
-        return;
-      }
-      newStatus = "Revision";
-      successMessage = "Permintaan dikembalikan untuk revisi (Revision).";
+    if (
+      !window.confirm(
+        "Yakin ingin mengembalikan permintaan ini untuk direvisi?"
+      )
+    ) {
+      setProcessingId(null);
+      return;
     }
 
     try {
-      await updateRequest(requestId, { status: newStatus });
-      setInfoMsg(successMessage);
+      // Update status menjadi Revision
+      await updateRequest(requestId, { status: "Revision" });
+      setInfoMsg("Permintaan dikembalikan untuk revisi (Revision).");
       loadRequests();
     } catch (error) {
       console.error(`Gagal ${actionType} permintaan:`, error);
@@ -103,8 +148,7 @@ const ApprovalList = () => {
         Daftar Permintaan yang Menunggu Persetujuan ({approvalRequests.length})
       </h1>
       <p className="mb-6 text-gray-600">
-        Tinjau permintaan desain yang baru diajukan (Status: Submitted) untuk
-        disetujui atau dikembalikan untuk revisi brief.
+        Tinjau permintaan desain yang baru diajukan (Status: Submitted).
       </p>
 
       {infoMsg && (
@@ -154,9 +198,8 @@ const ApprovalList = () => {
                     <div className="text-xs text-gray-500">{req.category}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {req.requester_info
-                      ? req.requester_info.full_name
-                      : "N/A (Cek RLS)"}
+                    {/* Mengakses array hasil join dengan alias 'requester_info' */}
+                    {req.requester_info ? req.requester_info.full_name : "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(req.deadline).toLocaleDateString("id-ID", {
@@ -187,9 +230,9 @@ const ApprovalList = () => {
                       onClick={() => handleAction(req.request_id, "approve")}
                       disabled={processingId === req.request_id}
                       className="text-green-600 hover:text-green-900 disabled:opacity-50"
-                      title="Setujui Permintaan"
+                      title="Tugaskan & Approve"
                     >
-                      <Check className="w-5 h-5 inline-block" />
+                      <UserCheck className="w-5 h-5 inline-block" />
                     </button>
                   </td>
                 </tr>
@@ -199,10 +242,22 @@ const ApprovalList = () => {
         </div>
       )}
 
+      {/* MODAL PREVIEW */}
       {selectedRequestToPreview && (
         <RequestPreviewModal
           request={selectedRequestToPreview}
           onClose={() => setSelectedRequestToPreview(null)}
+        />
+      )}
+
+      {/* MODAL PENUGASAN (UC-06) */}
+      {requestToAssign && (
+        <AssignDesignerModal
+          request={requestToAssign}
+          designers={designers}
+          loading={processingId === requestToAssign.request_id}
+          onAssign={handleAssignment}
+          onCancel={() => setRequestToAssign(null)}
         />
       )}
     </div>

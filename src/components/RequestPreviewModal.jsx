@@ -16,7 +16,6 @@ const RequestPreviewModal = ({ request, onClose }) => {
     }
   );
 
-  // Mengakses Requester (Menggunakan alias 'requester_info' dari query)
   const requesterName =
     request.requester_info && request.requester_info.length > 0
       ? request.requester_info[0].full_name
@@ -25,7 +24,6 @@ const RequestPreviewModal = ({ request, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-70">
       <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6 border-b pb-3">
           <h2 className="text-2xl font-bold text-purple-700">
             Preview Permintaan
@@ -38,7 +36,6 @@ const RequestPreviewModal = ({ request, onClose }) => {
           </button>
         </div>
 
-        {/* Detail Permintaan */}
         <h3 className="text-xl font-semibold mb-2 text-gray-800">
           {request.title}
         </h3>
@@ -66,7 +63,6 @@ const RequestPreviewModal = ({ request, onClose }) => {
           </p>
         </div>
 
-        {/* Deskripsi/Brief */}
         <div className="mb-6">
           <h4 className="text-md font-semibold text-gray-700 mb-2">
             Deskripsi/Brief:
@@ -76,7 +72,6 @@ const RequestPreviewModal = ({ request, onClose }) => {
           </p>
         </div>
 
-        {/* File Referensi */}
         <div className="mb-4">
           <h4 className="text-md font-semibold text-gray-700 mb-2">
             File Referensi:
@@ -93,7 +88,6 @@ const RequestPreviewModal = ({ request, onClose }) => {
                 <ExternalLink className="w-4 h-4" />
               </a>
               <div className="mt-3 max-h-60 overflow-hidden border-t border-gray-200 pt-3">
-                {/* Preview Gambar Dasar */}
                 {request.reference_url.match(/\.(jpeg|jpg|gif|png)$/i) && (
                   <img
                     src={request.reference_url}

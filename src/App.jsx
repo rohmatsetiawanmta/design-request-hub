@@ -8,6 +8,7 @@ import LoginForm from "./components/LoginForm";
 import CreateRequestForm from "./components/CreateRequestForm";
 import MyRequests from "./components/MyRequests";
 import ApprovalList from "./components/ApprovalList";
+import MyTasks from "./components/MyTasks";
 
 const App = () => {
   const { session, loading } = useAuth();
@@ -45,10 +46,13 @@ const App = () => {
 
           {activeMenu === "Daftar Persetujuan" && <ApprovalList />}
 
+          {activeMenu === "Tugas Saya" && <MyTasks />}
+
           {activeMenu !== "Dashboard" &&
             activeMenu !== "Buat Permintaan Baru" &&
             activeMenu !== "Daftar Permintaan Saya" &&
-            activeMenu !== "Daftar Persetujuan" && (
+            activeMenu !== "Daftar Persetujuan" &&
+            activeMenu !== "Tugas Saya" && (
               <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
                 <h1 className="text-2xl font-bold text-gray-800">
                   Halaman {activeMenu}
