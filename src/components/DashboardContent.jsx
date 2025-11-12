@@ -1,56 +1,133 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import MetricCard from "./MetricCard";
+import {
+  fetchDashboardData,
+  fetchActiveRequestsForTable,
+} from "../supabaseClient";
 
-// Data metrik mengadopsi FR-08/FR-14 (status permintaan)
-const metrics = [
-  {
-    title: "Total Requests",
-    value: 275,
-    detail: "Total permintaan tahun ini",
-    color: "blue",
-  },
-  {
-    title: "Submitted (New)",
-    value: 12,
-    detail: "Siap ditinjau Line Producer",
-    color: "yellow",
-  },
-  {
-    title: "In Progress",
-    value: 45,
-    detail: "Sedang dikerjakan Designer",
-    color: "purple",
-  },
-  {
-    title: "QC Completed",
-    value: 218,
-    detail: "Telah selesai & siap diarsipkan",
-    color: "green",
-  },
-];
+const getStatusColor = (status) => {
+  switch (status) {
+    case "Submitted":
+      return "bg-yellow-100 text-yellow-800";
+    case "In Progress":
+    case "Approved":
+      return "bg-purple-100 text-purple-800";
+    case "For Review":
+    case "Revision":
+      return "bg-red-100 text-red-800";
+    case "Completed":
+      return "bg-green-100 text-green-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
 
 const DashboardContent = () => {
+  const [metrics, setMetrics] = useState([]);
+  const [activeRequests, setActiveRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const calculateMetrics = (data) => {
+    const totalRequests = data.length;
+    const submittedCount = data.filter((r) => r.status === "Submitted").length;
+    const inProgressCount = data.filter(
+      (r) =>
+        r.status === "Approved" ||
+        r.status === "In Progress" ||
+        r.status === "For Review" ||
+        r.status === "Revision"
+    ).length;
+    const completedCount = data.filter((r) => r.status === "Completed").length;
+
+    return [
+      {
+        title: "Total Requests",
+        value: totalRequests,
+        detail: "Total permintaan tahun ini",
+        color: "blue",
+      },
+      {
+        title: "Submitted (New)",
+        value: submittedCount,
+        detail: "Siap ditinjau Line Producer",
+        color: "yellow",
+      },
+      {
+        title: "In Progress",
+        value: inProgressCount,
+        detail: "Sedang dikerjakan Designer",
+        color: "purple",
+      },
+      {
+        title: "QC Completed",
+        value: completedCount,
+        detail: "Telah selesai & siap diarsipkan",
+        color: "green",
+      },
+    ];
+  };
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const allRequests = await fetchDashboardData();
+      const activeTableData = await fetchActiveRequestsForTable();
+
+      setMetrics(calculateMetrics(allRequests));
+      setActiveRequests(activeTableData);
+    } catch (err) {
+      console.error("Gagal memuat data dashboard:", err);
+      setError(
+        "Gagal memuat data dashboard. Pastikan koneksi Supabase & tabel terkonfigurasi."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const totalActiveItems =
+    metrics.find((m) => m.title === "In Progress")?.value || 0;
+
+  if (loading) {
+    return (
+      <div className="p-6 text-center text-gray-600">
+        Memuat Dashboard Real-time...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center text-red-600 bg-red-50 rounded-xl">
+        {error}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      {/* 4.1. Ringkasan Metrik (Mirip HRIS Metrics Cards) */}
       <div className="grid grid-cols-4 gap-6">
         {metrics.map((metric) => (
           <MetricCard key={metric.title} {...metric} />
         ))}
       </div>
 
-      {/* 4.2. Tabel Detail (Mirip HRIS Table) */}
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800">
             Daftar Permintaan Aktif
           </h2>
           <button className="text-sm font-medium text-purple-600 hover:text-purple-700">
-            Lihat Semua ({metrics[1].value + metrics[2].value} Item)
+            Lihat Semua ({totalActiveItems} Item)
           </button>
         </div>
 
-        {/* Placeholder untuk Tabel dengan Filter & Data */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -70,27 +147,47 @@ const DashboardContent = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {/* Placeholder Data Baris */}
-              {Array(5)
-                .fill(0)
-                .map((_, i) => (
-                  <tr key={i} className="hover:bg-gray-50 cursor-pointer">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      Request Game UI: Episode 12
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      Bryan Carolus
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        Revision Needed
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      Nov 15, 2025
-                    </td>
-                  </tr>
-                ))}
+              {activeRequests.map((req) => (
+                <tr
+                  key={req.request_id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                >
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {req.title}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {req.designers
+                      ? req.designers.full_name
+                      : "Belum Ditugaskan"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                        req.status
+                      )}`}
+                    >
+                      {req.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(req.deadline).toLocaleDateString("id-ID", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </td>
+                </tr>
+              ))}
+              {activeRequests.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    className="px-6 py-4 text-center text-gray-500"
+                  >
+                    Tidak ada permintaan aktif saat ini.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

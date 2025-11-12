@@ -91,7 +91,7 @@ export async function createRequest(requestData, requesterId) {
 export async function fetchMyRequests(userId) {
   const { data, error } = await supabase
     .from("requests")
-    .select("*") // Ambil semua field
+    .select("*")
     .eq("requester_id", userId)
     .order("created_at", { ascending: false });
 
@@ -110,6 +110,54 @@ export async function updateRequest(requestId, updates) {
     .single();
 
   if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchDashboardData() {
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      "request_id, title, category, deadline, status, designer_id, designers:users!designer_id(full_name)"
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchActiveRequestsForTable() {
+  const activeStatuses = [
+    "Submitted",
+    "Approved",
+    "In Progress",
+    "For Review",
+    "Revision",
+  ];
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      `
+            request_id, 
+            title, 
+            category, 
+            deadline, 
+            status, 
+            designer:users!designer_id ( 
+                full_name
+            )
+        `
+    )
+    .in("status", activeStatuses)
+    .order("deadline", { ascending: true })
+    .limit(5);
+
+  if (error) {
+    console.error("Error fetching active requests for table:", error);
     throw error;
   }
   return data;

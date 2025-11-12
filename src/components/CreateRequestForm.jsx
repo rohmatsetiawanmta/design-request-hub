@@ -19,6 +19,8 @@ const CreateRequestForm = () => {
 
   const categories = ["Graphic", "Motion", "Game UI", "Other"];
 
+  const categoriesRequiringReference = ["Motion", "Game UI"];
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -42,6 +44,26 @@ const CreateRequestForm = () => {
 
     if (!formData.title || !formData.category || !formData.deadline) {
       setErrorMsg("Judul, kategori, dan tenggat waktu wajib diisi.");
+      setLoading(false);
+      return;
+    }
+
+    const today = new Date();
+    const deadlineDate = new Date(formData.deadline);
+
+    if (deadlineDate <= today) {
+      setErrorMsg("Tenggat Waktu tidak valid. Harus ditetapkan di masa depan.");
+      setLoading(false);
+      return;
+    }
+
+    if (
+      categoriesRequiringReference.includes(formData.category) &&
+      !formData.referenceFile
+    ) {
+      setErrorMsg(
+        `Kategori "${formData.category}" memerlukan unggahan File Referensi.`
+      );
       setLoading(false);
       return;
     }
@@ -168,7 +190,10 @@ const CreateRequestForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Unggah Referensi Desain (Opsional)
+            Unggah Referensi Desain
+            {categoriesRequiringReference.includes(formData.category) && (
+              <span className="text-red-500"> *</span>
+            )}
           </label>
           <input
             type="file"
