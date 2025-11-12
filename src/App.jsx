@@ -1,16 +1,25 @@
 import React, { useState } from "react";
-// Import klien Supabase dipertahankan, tapi tidak digunakan langsung di komponen layout ini.
-// import { supabase } from "./supabaseClient";
+import { useAuth } from "./AuthContext";
 
 // Import komponen yang telah dipecah
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import DashboardContent from "./components/DashboardContent";
+import LoginForm from "./components/LoginForm";
+import CreateRequestForm from "./components/CreateRequestForm";
 
 const App = () => {
+  const { session, loading } = useAuth();
   const [activeMenu, setActiveMenu] = useState("Dashboard");
 
-  // Menentukan judul header berdasarkan menu aktif
+  if (loading) {
+    return null;
+  }
+
+  if (!session) {
+    return <LoginForm />;
+  }
+
   const headerTitle = activeMenu.includes("Permintaan")
     ? "Buat Permintaan Desain"
     : activeMenu.includes("Persetujuan")
@@ -19,31 +28,32 @@ const App = () => {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      {/* Sidebar (Fixed width) */}
       <Sidebar activeMenu={activeMenu} setActiveMenu={setActiveMenu} />
 
-      {/* Main Content Area */}
       <div className="ml-64 flex-1">
-        {/* Header (Fixed Top) */}
         <Header title={headerTitle} />
 
-        {/* Konten Halaman (dengan padding untuk Header) */}
         <main className="p-8 pt-24">
-          {/* Menampilkan konten berdasarkan menu yang aktif */}
           {activeMenu === "Dashboard" && <DashboardContent />}
 
-          {/* Placeholder untuk halaman lain */}
-          {activeMenu !== "Dashboard" && (
-            <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
-              <h1 className="text-2xl font-bold text-gray-800">
-                Halaman {activeMenu}
-              </h1>
-              <p className="mt-4 text-gray-600">
-                Ini adalah area di mana fungsionalitas {activeMenu} akan
-                diimplementasikan.
-              </p>
-            </div>
-          )}
+          {activeMenu === "Buat Permintaan Baru" && <CreateRequestForm />}
+
+          {activeMenu !== "Dashboard" &&
+            activeMenu !== "Buat Permintaan Baru" && (
+              <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
+                <h1 className="text-2xl font-bold text-gray-800">
+                  Halaman {activeMenu}
+                </h1>
+                <p className="mt-4 text-gray-600">
+                  Ini adalah area di mana fungsionalitas {activeMenu} akan
+                  diimplementasikan.
+                </p>
+                <p className="mt-2 text-sm text-purple-500">
+                  Peran saat ini:{" "}
+                  {useAuth().userProfile?.role || "Tidak Ditemukan"}
+                </p>
+              </div>
+            )}
         </main>
       </div>
     </div>
