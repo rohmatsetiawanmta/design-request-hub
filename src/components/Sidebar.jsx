@@ -1,3 +1,5 @@
+// src/components/Sidebar.jsx
+
 import React from "react";
 import {
   Home,
@@ -8,9 +10,8 @@ import {
   Users,
   ListOrdered,
 } from "lucide-react";
-import { useAuth } from "../AuthContext"; // Import useAuth untuk mendapatkan peran
+import { useAuth } from "../AuthContext";
 
-// Peta Ikon Lucide untuk Sidebar
 const iconMap = {
   Home: Home,
   PlusCircle: PlusCircle,
@@ -21,7 +22,6 @@ const iconMap = {
   ListOrdered: ListOrdered,
 };
 
-// Komponen Ikon sederhana
 const SidebarIcon = ({ name, className = "w-5 h-5", strokeWidth = 2 }) => {
   const LucideIcon = iconMap[name];
   return LucideIcon ? (
@@ -67,54 +67,62 @@ const isRoleAllowed = (userRole, allowedRoles) => {
   return allowedRoles.some((allowed) => allowed.toUpperCase() === role);
 };
 
-const Sidebar = ({ activeMenu, setActiveMenu }) => {
+const Sidebar = ({ activeMenu, setActiveMenu, isInactive }) => {
   const { userProfile } = useAuth();
-  // Ambil peran dari context, default ke 'REQUESTER' jika belum dimuat atau null
   const currentUserRole = userProfile?.role || "REQUESTER";
 
-  // Filter menu berdasarkan peran pengguna
-  const visibleMenuGroups = menuGroups.filter((group) =>
-    isRoleAllowed(currentUserRole, group.allowedRoles)
-  );
+  let groupsToRender = menuGroups;
+  if (isInactive) {
+    groupsToRender = [
+      {
+        title: "",
+        allowedRoles: ["*"],
+        items: [],
+      },
+    ];
+  } else {
+    groupsToRender = menuGroups.filter((group) =>
+      isRoleAllowed(currentUserRole, group.allowedRoles)
+    );
+  }
 
   return (
     <div className="w-64 min-h-screen bg-white border-r border-gray-100 fixed flex flex-col">
-      {/* Brand Header */}
       <div className="p-5 text-xl font-extrabold text-gray-900 border-b border-gray-100 shadow-sm">
         Design Request Hub
       </div>
 
-      {/* Navigasi Menu */}
       <nav className="p-4 flex-1 overflow-y-auto">
-        {visibleMenuGroups.map(
-          (
-            group,
-            index // Render menu yang sudah difilter
-          ) => (
-            <div key={index} className="mb-6">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
-                {group.title}
-              </h3>
-              <div className="space-y-1">
-                {group.items.map((item) => (
-                  <a
-                    key={item.name}
-                    onClick={() => setActiveMenu(item.name)}
-                    className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150 text-sm
+        {groupsToRender.map((group, index) => (
+          <div key={index} className="mb-6">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+              {group.title}
+            </h3>
+            <div className="space-y-1">
+              {isInactive && (
+                <div className="p-3 text-xs text-red-600 bg-red-50 rounded-lg border border-red-200">
+                  Akses Dibatasi.
+                </div>
+              )}
+
+              {group.items.map((item) => (
+                <a
+                  key={item.name}
+                  onClick={() => setActiveMenu(item.name)}
+                  className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150 text-sm
                     ${
                       activeMenu === item.name
                         ? "bg-purple-600 text-white shadow-lg"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
-                  >
-                    <SidebarIcon name={item.icon} className="w-5 h-5 mr-3" />
-                    {item.name}
-                  </a>
-                ))}
-              </div>
+                >
+                  <SidebarIcon name={item.icon} className="w-5 h-5 mr-3" />
+                  {item.name}
+                </a>
+              ))}
             </div>
-          )
-        )}
+          </div>
+        ))}
       </nav>
     </div>
   );

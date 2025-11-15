@@ -6,16 +6,31 @@ import { useAuth } from "./AuthContext";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import DashboardContent from "./components/DashboardContent";
-// Import komponen baru
 import FullReportContent from "./components/FullReportContent";
 import LoginForm from "./components/LoginForm";
 import CreateRequestForm from "./components/CreateRequestForm";
 import MyRequests from "./components/MyRequests";
 import ApprovalList from "./components/ApprovalList";
 import MyTasks from "./components/MyTasks";
+import UserManagement from "./components/UserManagement";
+
+const InactiveAccountScreen = () => (
+  <div className="p-20 text-center bg-white rounded-xl shadow-2xl border-4 border-red-300">
+    <h1 className="text-4xl font-extrabold text-red-700 mb-4">
+      ❌ Akun Nonaktif
+    </h1>
+    <p className="text-lg text-gray-700">
+      Akses Anda ke sistem ini telah dinonaktifkan.
+    </p>
+    <p className="mt-3 text-red-500 font-medium">
+      Harap hubungi Administrator atau Line Producer Anda untuk informasi lebih
+      lanjut.
+    </p>
+  </div>
+);
 
 const App = () => {
-  const { session, loading } = useAuth();
+  const { session, loading, userProfile } = useAuth();
   const [activeMenu, setActiveMenu] = useState("Dashboard");
 
   if (loading) {
@@ -26,7 +41,11 @@ const App = () => {
     return <LoginForm />;
   }
 
-  const headerTitle = activeMenu.includes("Permintaan Baru")
+  const isInactive = userProfile && userProfile.is_active === false;
+
+  const headerTitle = isInactive
+    ? "Akses Terbatas"
+    : activeMenu.includes("Permintaan Baru")
     ? "Buat Permintaan Desain"
     : activeMenu.includes("Daftar Permintaan")
     ? "Daftar Permintaan Saya"
@@ -36,47 +55,57 @@ const App = () => {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar activeMenu={activeMenu} setActiveMenu={setActiveMenu} />
+      <Sidebar
+        activeMenu={isInactive ? "Dashboard" : activeMenu}
+        setActiveMenu={setActiveMenu}
+        isInactive={isInactive}
+      />
 
       <div className="ml-64 flex-1">
         <Header title={headerTitle} />
 
         <main className="p-8 pt-24">
-          {/* 1. Dashboard (Rekap Sederhana) */}
-          {activeMenu === "Dashboard" && <DashboardContent />}
+          {isInactive ? (
+            <InactiveAccountScreen />
+          ) : (
+            <>
+              {activeMenu === "Dashboard" && <DashboardContent />}
 
-          {/* 2. Laporan & Analisis (Full Report, dengan Filter/Export) */}
-          {activeMenu === "Laporan & Analisis" && <FullReportContent />}
+              {activeMenu === "Laporan & Analisis" && <FullReportContent />}
 
-          {activeMenu === "Buat Permintaan Baru" && <CreateRequestForm />}
+              {activeMenu === "Buat Permintaan Baru" && <CreateRequestForm />}
 
-          {activeMenu === "Daftar Permintaan Saya" && <MyRequests />}
+              {activeMenu === "Daftar Permintaan Saya" && <MyRequests />}
 
-          {activeMenu === "Daftar Persetujuan" && <ApprovalList />}
+              {activeMenu === "Daftar Persetujuan" && <ApprovalList />}
 
-          {activeMenu === "Tugas Saya" && <MyTasks />}
+              {activeMenu === "Tugas Saya" && <MyTasks />}
 
-          {/* Block untuk menu yang belum diimplementasikan */}
-          {activeMenu !== "Dashboard" &&
-            activeMenu !== "Laporan & Analisis" &&
-            activeMenu !== "Buat Permintaan Baru" &&
-            activeMenu !== "Daftar Permintaan Saya" &&
-            activeMenu !== "Daftar Persetujuan" &&
-            activeMenu !== "Tugas Saya" && (
-              <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
-                <h1 className="text-2xl font-bold text-gray-800">
-                  Halaman {activeMenu}
-                </h1>
-                <p className="mt-4 text-gray-600">
-                  Ini adalah area di mana fungsionalitas {activeMenu} akan
-                  diimplementasikan.
-                </p>
-                <p className="mt-2 text-sm text-purple-500">
-                  Peran saat ini:{" "}
-                  {useAuth().userProfile?.role || "Tidak Ditemukan"}
-                </p>
-              </div>
-            )}
+              {activeMenu === "Kelola Pengguna" && <UserManagement />}
+
+              {activeMenu !== "Dashboard" &&
+                activeMenu !== "Laporan & Analisis" &&
+                activeMenu !== "Buat Permintaan Baru" &&
+                activeMenu !== "Daftar Permintaan Saya" &&
+                activeMenu !== "Daftar Persetujuan" &&
+                activeMenu !== "Tugas Saya" &&
+                activeMenu !== "Kelola Pengguna" && (
+                  <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
+                    <h1 className="text-2xl font-bold text-gray-800">
+                      Halaman {activeMenu}
+                    </h1>
+                    <p className="mt-4 text-gray-600">
+                      Ini adalah area di mana fungsionalitas {activeMenu} akan
+                      diimplementasikan.
+                    </p>
+                    <p className="mt-2 text-sm text-purple-500">
+                      Peran saat ini:{" "}
+                      {useAuth().userProfile?.role || "Tidak Ditemukan"}
+                    </p>
+                  </div>
+                )}
+            </>
+          )}
         </main>
       </div>
     </div>

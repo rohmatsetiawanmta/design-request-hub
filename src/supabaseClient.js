@@ -33,7 +33,7 @@ export async function logout() {
 export async function getUserProfile(userId) {
   const { data, error } = await supabase
     .from("users")
-    .select("full_name, role")
+    .select("full_name, role, is_active")
     .eq("id", userId)
     .single();
 
@@ -365,6 +365,42 @@ export async function fetchActiveRequestsForTable() {
 
   if (error) {
     console.error("Error fetching active requests for table:", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchAllUsers() {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name, email, role, is_active")
+    .order("full_name", { ascending: true });
+  console.log(data);
+
+  if (error) {
+    console.error("Error fetching all users:", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function updateUserRoleAndStatus(userId, newRole, isActive) {
+  const updates = {
+    role: newRole,
+    is_active: isActive,
+    // Asumsi ada kolom updated_at di tabel users untuk tujuan audit
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("users")
+    .update(updates)
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating user role/status:", error);
     throw error;
   }
   return data;
