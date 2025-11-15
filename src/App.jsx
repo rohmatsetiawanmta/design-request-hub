@@ -1,9 +1,13 @@
+// src/App.jsx (REFACTORED)
+
 import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import DashboardContent from "./components/DashboardContent";
+// Import komponen baru
+import FullReportContent from "./components/FullReportContent";
 import LoginForm from "./components/LoginForm";
 import CreateRequestForm from "./components/CreateRequestForm";
 import MyRequests from "./components/MyRequests";
@@ -38,7 +42,11 @@ const App = () => {
         <Header title={headerTitle} />
 
         <main className="p-8 pt-24">
+          {/* 1. Dashboard (Rekap Sederhana) */}
           {activeMenu === "Dashboard" && <DashboardContent />}
+
+          {/* 2. Laporan & Analisis (Full Report, dengan Filter/Export) */}
+          {activeMenu === "Laporan & Analisis" && <FullReportContent />}
 
           {activeMenu === "Buat Permintaan Baru" && <CreateRequestForm />}
 
@@ -48,7 +56,9 @@ const App = () => {
 
           {activeMenu === "Tugas Saya" && <MyTasks />}
 
+          {/* Block untuk menu yang belum diimplementasikan */}
           {activeMenu !== "Dashboard" &&
+            activeMenu !== "Laporan & Analisis" &&
             activeMenu !== "Buat Permintaan Baru" &&
             activeMenu !== "Daftar Permintaan Saya" &&
             activeMenu !== "Daftar Persetujuan" &&

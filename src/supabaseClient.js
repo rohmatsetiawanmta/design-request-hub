@@ -189,7 +189,6 @@ export async function submitReviewAndChangeStatus(
 // FUNGSI SIMULASI UC-12: Save QC Report
 export async function saveQCReport(reportData) {
   // Simulates saving a QC report based on AI findings (OCR/NLP/CV)
-  // Asumsi tabel 'qc_reports' ada di database (sesuai ERD/Class Diagram).
   const { error } = await supabase.from("qc_reports").insert(reportData);
 
   if (error) {
@@ -202,7 +201,6 @@ export async function saveQCReport(reportData) {
 // FUNGSI SIMULASI UC-14: Archive Final Design
 export async function archiveDesign(requestId, finalDesignUrl) {
   // Simulates the archiving process (UC-14) after completion
-  // Asumsi tabel 'archive' ada di database (sesuai ERD/Class Diagram).
   const { error } = await supabase.from("archive").insert({
     request_id: requestId,
     archive_url: finalDesignUrl, // Store final public URL
@@ -228,7 +226,7 @@ export async function fetchDesigners() {
 }
 
 // --------------------------------------------------------------------------------
-// FUNGSI MODIFIKASI UC-11: Menerima Filter
+// FUNGSI MODIFIKASI UC-11: Fetch Dashboard Data dengan Filter
 // --------------------------------------------------------------------------------
 export async function fetchDashboardData(filters = {}) {
   let query = supabase
@@ -247,7 +245,6 @@ export async function fetchDashboardData(filters = {}) {
     query = query.eq("designer_id", filters.designerId);
   }
 
-  // Catatan: Supabase perlu timestamp, tapi di sini menggunakan format date string sederhana
   if (filters.startDate) {
     query = query.gte("created_at", filters.startDate);
   }
@@ -255,6 +252,25 @@ export async function fetchDashboardData(filters = {}) {
   if (filters.endDate) {
     query = query.lte("created_at", filters.endDate);
   }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+// --------------------------------------------------------------------------------
+// FUNGSI BARU UC-11: Fetch Revision Counts untuk Analisis
+// --------------------------------------------------------------------------------
+export async function fetchRevisionCounts(filters = {}) {
+  let query = supabase
+    .from("feedback")
+    .select("request_id")
+    .eq("status_change", "Revision");
+
+  // Filter di sini bisa ditambahkan berdasarkan filter waktu jika diperlukan
+  // Untuk saat ini, kita hanya fokus pada status 'Revision'
 
   const { data, error } = await query;
 
