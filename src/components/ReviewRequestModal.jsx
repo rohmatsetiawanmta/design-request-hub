@@ -1,19 +1,16 @@
+// src/components/ReviewRequestModal.jsx
+
 import React, { useState } from "react";
-import { submitReviewAndChangeStatus } from "../supabaseClient";
+import { submitReviewAndChangeStatus, archiveDesign } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import { X, ExternalLink, Send } from "lucide-react";
 
-/**
- * Modal untuk Requester/Reviewer memberikan feedback/revisi (UC-08)
- * atau menyelesaikan permintaan (UC-10).
- */
 const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
   const { user } = useAuth();
   const [feedbackText, setFeedbackText] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // UC-08: Menangani permintaan revisi (Revision)
   const handleRevision = async () => {
     setErrorMsg("");
     if (!feedbackText.trim()) {
@@ -25,13 +22,12 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      // Panggil fungsi yang menyimpan feedback dan mengubah status menjadi Revision
       await submitReviewAndChangeStatus(
         request.request_id,
         user.id,
-        request.version_no || 1, // Mengambil nomor versi desain yang sedang di-review
+        request.version_no || 1,
         feedbackText.trim(),
-        "Revision" // Status baru
+        "Revision"
       );
 
       onSuccess(
@@ -48,7 +44,6 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
     }
   };
 
-  // UC-10: Menangani penyelesaian (Complete)
   const handleComplete = async () => {
     if (
       !window.confirm(
@@ -62,17 +57,23 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
     setErrorMsg("");
 
     try {
-      // Menggunakan fungsi submitReviewAndChangeStatus untuk menyimpan catatan (jika ada) dan mengubah status
       await submitReviewAndChangeStatus(
         request.request_id,
         user.id,
         request.version_no || 1,
-        feedbackText.trim(), // Catatan opsional akan dicatat jika ada
-        "Completed" // Status baru
+        feedbackText.trim(),
+        "Completed"
       );
 
+      const finalDesignUrl = request.latest_design_url;
+      if (finalDesignUrl) {
+        await archiveDesign(request.request_id, finalDesignUrl);
+      } else {
+        console.warn("URL desain terbaru tidak ditemukan. Arsip dilewati.");
+      }
+
       onSuccess(
-        `Permintaan "${request.title}" berhasil diselesaikan (Completed).`
+        `Permintaan "${request.title}" berhasil diselesaikan (Completed) dan desain final diarsipkan.`
       );
       onClose();
     } catch (error) {
@@ -105,7 +106,6 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
           </div>
         )}
 
-        {/* Info Desain Terbaru */}
         <div className="mb-6 space-y-3">
           <p className="text-sm font-medium text-gray-700">
             Hasil Desain Terbaru:
@@ -129,7 +129,6 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
           </p>
         </div>
 
-        {/* Input Feedback */}
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">

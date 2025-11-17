@@ -198,17 +198,14 @@ export async function saveQCReport(reportData) {
   return true;
 }
 
-// FUNGSI SIMULASI UC-14: Archive Final Design
 export async function archiveDesign(requestId, finalDesignUrl) {
-  // Simulates the archiving process (UC-14) after completion
   const { error } = await supabase.from("archive").insert({
     request_id: requestId,
-    archive_url: finalDesignUrl, // Store final public URL
+    archive_url: finalDesignUrl,
   });
 
   if (error) {
     console.error("Error archiving design:", error);
-    // Asumsi: Error ini ditoleransi agar alur utama tidak terhenti jika tabel belum ada.
   }
   return true;
 }
@@ -375,7 +372,6 @@ export async function fetchAllUsers() {
     .from("users")
     .select("id, full_name, email, role, is_active")
     .order("full_name", { ascending: true });
-  console.log(data);
 
   if (error) {
     console.error("Error fetching all users:", error);
@@ -384,24 +380,104 @@ export async function fetchAllUsers() {
   return data;
 }
 
-export async function updateUserRoleAndStatus(userId, newRole, isActive) {
+export async function updateUserRoleAndStatus(
+  userId,
+  newRole,
+  isActive,
+  changerId // ARGUMEN BARU UNTUK AUDIT
+) {
   const updates = {
     role: newRole,
     is_active: isActive,
-    // Asumsi ada kolom updated_at di tabel users untuk tujuan audit
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const { data: oldUser } = await supabase
+    .from("users")
+    .select("role, is_active")
+    .eq("id", userId)
+    .single();
+
+  const { data: updatedUser, error: updateError } = await supabase
     .from("users")
     .update(updates)
     .eq("id", userId)
     .select()
     .single();
 
+  if (updateError) {
+    console.error("Error updating user role/status:", updateError);
+    throw updateError;
+  }
+
+  let actionType = "USER_UPDATE";
+  let description = `Pengguna ${updatedUser.full_name} diperbarui.`;
+
+  if (oldUser.is_active && !isActive) {
+    actionType = "DEACTIVATION";
+    description = `Pengguna ${updatedUser.full_name} dinonaktifkan.`;
+  } else if (!oldUser.is_active && isActive) {
+    actionType = "REACTIVATION";
+    description = `Pengguna ${updatedUser.full_name} diaktifkan kembali.`;
+  } else if (oldUser.role !== newRole) {
+    actionType = "ROLE_CHANGE";
+    description = `Peran pengguna ${updatedUser.full_name} diubah dari ${oldUser.role} menjadi ${newRole}.`;
+  }
+
+  const { error: logError } = await supabase.from("audit_logs").insert({
+    changer_id: changerId,
+    target_user_id: userId,
+    action_type: actionType,
+    old_value: oldUser, // Catat nilai lama
+    new_value: { role: updatedUser.role, is_active: updatedUser.is_active }, // Catat nilai baru
+    description: description,
+  });
+
+  if (logError) {
+    console.warn("Gagal mencatat audit log:", logError);
+  }
+
+  return updatedUser;
+}
+
+export async function fetchAuditLogs() {
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select(
+      `
+      timestamp,
+      action_type,
+      description,
+      old_value,
+      new_value,
+      changer:changer_id(full_name),
+      target_user:target_user_id(full_name)
+      `
+    )
+    .order("timestamp", { ascending: false }); // Urutkan dari yang terbaru
+
   if (error) {
-    console.error("Error updating user role/status:", error);
+    console.error("Error fetching audit logs:", error);
     throw error;
   }
   return data;
+}
+
+export async function createNewUserByAdmin(email, password, fullName, role) {
+  const { data, error } = await supabase.functions.invoke("admin-create-user", {
+    method: "POST",
+    body: { email, password, fullName, role },
+  });
+
+  if (error) {
+    throw new Error(`Panggilan Edge Function gagal: ${error.message}`);
+  }
+
+  if (data.error) {
+    throw new Error(
+      data.error.message || "Gagal membuat pengguna melalui server."
+    );
+  }
+
+  return data.user;
 }

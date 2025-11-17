@@ -57,6 +57,7 @@ const menuGroups = [
     items: [
       { name: "Laporan & Analisis", icon: "BarChart" },
       { name: "Kelola Pengguna", icon: "Users" },
+      { name: "Log Audit", icon: "ClipboardList" },
     ],
   },
 ];

@@ -13,6 +13,7 @@ import MyRequests from "./components/MyRequests";
 import ApprovalList from "./components/ApprovalList";
 import MyTasks from "./components/MyTasks";
 import UserManagement from "./components/UserManagement";
+import AuditLogViewer from "./components/AuditLogViewer";
 
 const InactiveAccountScreen = () => (
   <div className="p-20 text-center bg-white rounded-xl shadow-2xl border-4 border-red-300">
@@ -83,13 +84,16 @@ const App = () => {
 
               {activeMenu === "Kelola Pengguna" && <UserManagement />}
 
+              {activeMenu === "Log Audit" && <AuditLogViewer />}
+
               {activeMenu !== "Dashboard" &&
                 activeMenu !== "Laporan & Analisis" &&
                 activeMenu !== "Buat Permintaan Baru" &&
                 activeMenu !== "Daftar Permintaan Saya" &&
                 activeMenu !== "Daftar Persetujuan" &&
                 activeMenu !== "Tugas Saya" &&
-                activeMenu !== "Kelola Pengguna" && (
+                activeMenu !== "Kelola Pengguna" &&
+                activeMenu !== "Log Audit" && (
                   <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
                     <h1 className="text-2xl font-bold text-gray-800">
                       Halaman {activeMenu}
