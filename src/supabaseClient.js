@@ -91,6 +91,46 @@ export async function uploadDesignAsset(file, requestId, userId) {
   return publicUrlData.publicUrl;
 }
 
+// FUNGSI BARU: Mengambil ID pengguna yang berhak menyetujui (PRODUCER/MGMT/ADMIN)
+export async function fetchApproverRecipients() {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id")
+    .in("role", ["PRODUCER", "MANAGEMENT", "ADMIN"])
+    .eq("is_active", true);
+
+  if (error) {
+    console.error("Error fetching approver recipients:", error);
+    return [];
+  }
+  return data.map((user) => user.id);
+}
+
+// FUNGSI BARU: Mencatat notifikasi ke tabel 'notifications' (UC-15 Helper)
+export async function sendNotification(requestId, eventType, message, userIds) {
+  if (!userIds || userIds.length === 0) {
+    console.warn("sendNotification: No recipients specified.");
+    return;
+  }
+
+  const notificationsToInsert = userIds.map((userId) => ({
+    user_id: userId,
+    request_id: requestId,
+    event_type: eventType,
+    message: message,
+  }));
+
+  const { error } = await supabase
+    .from("notifications")
+    .insert(notificationsToInsert);
+
+  if (error) {
+    console.error("Error sending notification:", error);
+    return false;
+  }
+  return true;
+}
+
 export async function createRequest(requestData, requesterId) {
   const { title, description, category, deadline, reference_url } = requestData;
 
@@ -110,6 +150,21 @@ export async function createRequest(requestData, requesterId) {
   if (error) {
     throw error;
   }
+
+  // >>> LOGIKA NOTIFIKASI: Permintaan Dibuat (UC-15) <<<
+  const approverIds = await fetchApproverRecipients();
+  const message = `Permintaan baru [${data.category}] "${data.title}" telah dibuat dan menunggu persetujuan.`;
+
+  if (approverIds.length > 0) {
+    await sendNotification(
+      data.request_id,
+      "REQUEST_CREATED",
+      message,
+      approverIds
+    );
+  }
+  // >>> AKHIR LOGIKA NOTIFIKASI <<<
+
   return data;
 }
 
@@ -131,12 +186,49 @@ export async function updateRequest(requestId, updates) {
     .from("requests")
     .update(updates)
     .eq("request_id", requestId)
-    .select()
+    .select(
+      `
+      *, 
+      requester:users!requester_id(id), 
+      designer:users!designer_id(id)
+      `
+    )
     .single();
 
   if (error) {
     throw error;
   }
+
+  // --- LOGIKA NOTIFIKASI (MODIFIKASI EVENT TYPE) ---
+  const newStatus = updates.status;
+  const requesterId = data.requester.id;
+  const designerId = data.designer?.id;
+
+  const recipients = [];
+  let message = "";
+  let eventType = "";
+
+  if (newStatus === "Approved") {
+    recipients.push(requesterId);
+    if (designerId) recipients.push(designerId);
+    message = `Permintaan "${data.title}" telah disetujui dan ditugaskan.`;
+    eventType = "REQUEST_APPROVED";
+  } else if (newStatus === "Revision" && !designerId) {
+    recipients.push(requesterId);
+    message = `Permintaan "${data.title}" dikembalikan untuk revisi brief.`;
+    eventType = "REVISION_BRIEF";
+  } else if (newStatus === "Canceled") {
+    recipients.push(requesterId);
+    if (designerId) recipients.push(designerId);
+    message = `Permintaan "${data.title}" telah dibatalkan.`;
+    eventType = "REQUEST_CANCELED";
+  }
+
+  if (recipients.length > 0) {
+    await sendNotification(data.request_id, eventType, message, recipients);
+  }
+  // --- AKHIR LOGIKA NOTIFIKASI ---
+
   return data;
 }
 
@@ -173,7 +265,13 @@ export async function submitReviewAndChangeStatus(
     .from("requests")
     .update(updates)
     .eq("request_id", requestId)
-    .select()
+    .select(
+      `
+      *, 
+      requester:users!requester_id(id), 
+      designer:users!designer_id(id)
+      `
+    )
     .single();
 
   if (updateError) {
@@ -181,6 +279,33 @@ export async function submitReviewAndChangeStatus(
     throw new Error(
       `Gagal memperbarui status permintaan menjadi ${newStatus}.`
     );
+  }
+
+  // --- LOGIKA NOTIFIKASI ---
+  const requesterId = data.requester.id;
+  const designerId = data.designer.id;
+
+  const recipients = [requesterId, designerId];
+  let message = "";
+  let eventType = "";
+
+  if (newStatus === "Revision") {
+    recipients.splice(recipients.indexOf(requesterId), 1); // Notif hanya ke Designer
+    message = `Desain V${versionNo} untuk "${data.title}" perlu direvisi. Cek feedback.`;
+    eventType = "REVISION_DESIGN";
+  } else if (newStatus === "Completed") {
+    message = `Permintaan "${data.title}" berhasil Diselesaikan (Completed).`;
+    eventType = "COMPLETED";
+  }
+
+  if (recipients.length > 0) {
+    await sendNotification(data.request_id, eventType, message, recipients);
+  }
+  // --- AKHIR LOGIKA NOTIFIKASI ---
+
+  const finalDesignUrl = data.latest_design_url;
+  if (newStatus === "Completed" && finalDesignUrl) {
+    await archiveDesign(data.request_id, finalDesignUrl);
   }
 
   return data;
@@ -480,4 +605,150 @@ export async function createNewUserByAdmin(email, password, fullName, role) {
   }
 
   return data.user;
+}
+
+export async function fetchUnreadNotificationCount(userId) {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .is("read_at", null);
+
+  if (error) {
+    console.error("Error fetching unread notification count:", error);
+    return 0;
+  }
+  return count;
+}
+
+export async function fetchRecentNotifications(userId) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(
+      `
+      id, 
+      message, 
+      sent_at, 
+      read_at,
+      event_type,
+      request_id,
+      requests (title)
+    `
+    )
+    .eq("user_id", userId)
+    .order("sent_at", { ascending: false })
+    .limit(50); // Batasan untuk menampilkan riwayat
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function markNotificationsAsRead(userId, notificationIds) {
+  // Tipe event yang bersifat shared responsibility (untuk Approver/Admin)
+  const SHARED_EVENTS = ["REQUEST_CREATED", "REQUEST_APPROVED"];
+
+  // Jika hanya satu ID yang ditandai, cek apakah itu event bersama
+  if (notificationIds.length === 1) {
+    const notifId = notificationIds[0];
+    const { data: notifData, error: fetchError } = await supabase
+      .from("notifications")
+      .select("request_id, event_type")
+      .eq("id", notifId)
+      .single();
+
+    if (
+      !fetchError &&
+      notifData &&
+      SHARED_EVENTS.includes(notifData.event_type)
+    ) {
+      // 1. Dapatkan semua notifikasi terkait event ini yang belum dibaca
+      const { data: allRelatedUnread, error: relatedError } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("request_id", notifData.request_id)
+        .eq("event_type", notifData.event_type)
+        .is("read_at", null)
+        .in("user_id", await fetchApproverRecipients()); // Hanya berlaku untuk Approver/Admin
+
+      if (relatedError)
+        throw new Error("Gagal mengidentifikasi notifikasi terkait.");
+
+      const allIdsToMark = allRelatedUnread.map((n) => n.id);
+
+      // 2. Tandai SEMUA notifikasi terkait sebagai sudah dibaca (Group Read)
+      const { error: groupUpdateError } = await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .in("id", allIdsToMark);
+
+      if (groupUpdateError) throw groupUpdateError;
+      return true;
+    }
+  }
+
+  // Fallback untuk notifikasi personal (atau jika 'Mark All' dijalankan)
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .in("id", notificationIds)
+    .eq("user_id", userId); // Pastikan hanya pengguna sendiri yang dapat menandai
+
+  if (error) {
+    throw error;
+  }
+  return true;
+}
+
+// --------------------------------------------------------------------
+// >>> FUNGSI BARU UNTUK BADGE SIDEBAR <<<
+// --------------------------------------------------------------------
+
+// 1. Menghitung Request yang Menunggu Persetujuan (Daftar Persetujuan)
+export async function fetchSubmittedRequestCount() {
+  const { count, error } = await supabase
+    .from("requests")
+    .select("request_id", { count: "exact", head: true })
+    .eq("status", "Submitted");
+
+  if (error) {
+    console.error("Error fetching submitted count:", error);
+    return 0;
+  }
+  return count;
+}
+
+// 2. Menghitung Tugas Aktif untuk Designer (Tugas Saya)
+export async function fetchMyTaskCount(userId) {
+  const activeStatuses = ["Approved", "Revision"];
+
+  const { count, error } = await supabase
+    .from("requests")
+    .select("request_id", { count: "exact", head: true })
+    .eq("designer_id", userId)
+    .in("status", activeStatuses);
+
+  if (error) {
+    console.error("Error fetching my task count:", error);
+    return 0;
+  }
+  return count;
+}
+
+// 3. Menghitung Request yang Menunggu Review dari Requester (Daftar Permintaan Saya)
+export async function fetchMyReviewCount(userId) {
+  const reviewStatus = "For Review";
+
+  const { count, error } = await supabase
+    .from("requests")
+    .select("request_id", { count: "exact", head: true })
+    .eq("requester_id", userId)
+    .eq("status", reviewStatus);
+
+  if (error) {
+    console.error("Error fetching my review count:", error);
+    return 0;
+  }
+  return count;
 }

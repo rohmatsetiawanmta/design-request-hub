@@ -1,5 +1,3 @@
-// src/components/Sidebar.jsx
-
 import React from "react";
 import {
   Home,
@@ -27,6 +25,15 @@ const SidebarIcon = ({ name, className = "w-5 h-5", strokeWidth = 2 }) => {
   return LucideIcon ? (
     <LucideIcon className={className} strokeWidth={strokeWidth} />
   ) : null;
+};
+
+const SidebarBadge = ({ count }) => {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
 };
 
 const menuGroups = [
@@ -65,11 +72,16 @@ const menuGroups = [
 const isRoleAllowed = (userRole, allowedRoles) => {
   if (!userRole) return false;
   const role = userRole.toUpperCase();
+  if (role === "MANAGEMENT" || role === "PRODUCER") {
+    if (allowedRoles.includes("ADMIN") || allowedRoles.includes("MANAGEMENT")) {
+      return true;
+    }
+  }
   return allowedRoles.some((allowed) => allowed.toUpperCase() === role);
 };
 
 const Sidebar = ({ activeMenu, setActiveMenu, isInactive }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, sidebarBadgeCounts } = useAuth();
   const currentUserRole = userProfile?.role || "REQUESTER";
 
   let groupsToRender = menuGroups;
@@ -106,21 +118,34 @@ const Sidebar = ({ activeMenu, setActiveMenu, isInactive }) => {
                 </div>
               )}
 
-              {group.items.map((item) => (
-                <a
-                  key={item.name}
-                  onClick={() => setActiveMenu(item.name)}
-                  className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150 text-sm
-                    ${
-                      activeMenu === item.name
-                        ? "bg-purple-600 text-white shadow-lg"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                >
-                  <SidebarIcon name={item.icon} className="w-5 h-5 mr-3" />
-                  {item.name}
-                </a>
-              ))}
+              {group.items.map((item) => {
+                let badgeCount = 0;
+                // LOGIKA PENENTUAN BADGE BERDASARKAN NAMAMENU
+                if (item.name === "Daftar Permintaan Saya") {
+                  badgeCount = sidebarBadgeCounts.myReviews;
+                } else if (item.name === "Tugas Saya") {
+                  badgeCount = sidebarBadgeCounts.myTasks;
+                } else if (item.name === "Daftar Persetujuan") {
+                  badgeCount = sidebarBadgeCounts.submitted;
+                }
+
+                return (
+                  <a
+                    key={item.name}
+                    onClick={() => setActiveMenu(item.name)}
+                    className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-150 text-sm
+                        ${
+                          activeMenu === item.name
+                            ? "bg-purple-600 text-white shadow-lg"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                  >
+                    <SidebarIcon name={item.icon} className="w-5 h-5 mr-3" />
+                    {item.name}
+                    <SidebarBadge count={badgeCount} />
+                  </a>
+                );
+              })}
             </div>
           </div>
         ))}

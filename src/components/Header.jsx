@@ -1,10 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { Settings, Bell, LogOut } from "lucide-react";
 import { logout } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
+import NotificationListModal from "./NotificationListModal";
 
 const Header = ({ title }) => {
-  const { userProfile, setSession } = useAuth();
+  const {
+    userProfile,
+    setSession,
+    unreadNotificationCount,
+    loadNotificationCount,
+    user,
+  } = useAuth();
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   const fullName = userProfile?.full_name || "Nama Pengguna";
   const role = userProfile?.role || "Guest";
@@ -16,6 +24,19 @@ const Header = ({ title }) => {
     } catch (error) {
       console.error("Logout gagal:", error.message);
       alert("Gagal logout. Silakan coba lagi.");
+    }
+  };
+
+  const handleBellClick = () => {
+    if (user) {
+      setIsNotificationModalOpen(true);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsNotificationModalOpen(false);
+    if (user?.id) {
+      loadNotificationCount(user.id);
     }
   };
 
@@ -33,8 +54,16 @@ const Header = ({ title }) => {
       <div className="text-xl font-bold text-gray-800">{title}</div>
 
       <div className="flex items-center space-x-6">
-        <button className="text-gray-500 hover:text-purple-600 transition-colors">
+        <button
+          onClick={handleBellClick}
+          className="text-gray-500 hover:text-purple-600 transition-colors relative"
+        >
           <Bell className="w-6 h-6" />
+          {unreadNotificationCount > 0 && (
+            <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+              {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+            </span>
+          )}
         </button>
         <button className="text-gray-500 hover:text-purple-600 transition-colors">
           <Settings className="w-6 h-6" />
@@ -58,6 +87,10 @@ const Header = ({ title }) => {
           </div>
         </div>
       </div>
+
+      {isNotificationModalOpen && (
+        <NotificationListModal onClose={handleCloseModal} />
+      )}
     </header>
   );
 };
