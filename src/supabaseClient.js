@@ -171,7 +171,12 @@ export async function createRequest(requestData, requesterId) {
 export async function fetchMyRequests(userId) {
   const { data, error } = await supabase
     .from("requests")
-    .select("*")
+    .select(
+      `
+      *,
+      designer:users!designer_id(full_name)
+    `
+    )
     .eq("requester_id", userId)
     .order("created_at", { ascending: false });
 
@@ -199,7 +204,6 @@ export async function updateRequest(requestId, updates) {
     throw error;
   }
 
-  // --- LOGIKA NOTIFIKASI (MODIFIKASI EVENT TYPE) ---
   const newStatus = updates.status;
   const requesterId = data.requester.id;
   const designerId = data.designer?.id;
@@ -213,9 +217,9 @@ export async function updateRequest(requestId, updates) {
     if (designerId) recipients.push(designerId);
     message = `Permintaan "${data.title}" telah disetujui dan ditugaskan.`;
     eventType = "REQUEST_APPROVED";
-  } else if (newStatus === "Revision" && !designerId) {
+  } else if (newStatus === "Rejected") {
     recipients.push(requesterId);
-    message = `Permintaan "${data.title}" dikembalikan untuk revisi brief.`;
+    message = `Permintaan "${data.title}" ditolak (Rejected) dan dikembalikan untuk revisi brief.`;
     eventType = "REVISION_BRIEF";
   } else if (newStatus === "Canceled") {
     recipients.push(requesterId);
@@ -432,7 +436,7 @@ export async function fetchRequestsForApproval() {
 }
 
 export async function fetchMyTasks(designerId) {
-  const activeStatuses = ["Approved", "In Progress", "Revision"];
+  const activeStatuses = ["Approved", "In Progress", "Revision", "Completed"];
 
   const { data, error } = await supabase
     .from("requests")

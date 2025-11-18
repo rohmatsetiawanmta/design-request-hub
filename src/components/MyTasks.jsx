@@ -16,6 +16,8 @@ const getStatusColor = (status) => {
       return "bg-red-100 text-red-800";
     case "For Review":
       return "bg-blue-100 text-blue-800";
+    case "Completed": // <-- Tambah warna Completed
+      return "bg-green-100 text-green-800";
     default:
       return "bg-gray-100 text-gray-800";
   }
@@ -36,6 +38,7 @@ const MyTasks = () => {
     setLoading(true);
     setError(null);
     try {
+      // Mengambil semua status termasuk Completed
       const data = await fetchMyTasks(designerId);
       setTasks(data);
     } catch (err) {
@@ -73,18 +76,19 @@ const MyTasks = () => {
     );
   }
 
-  const tasksReadyForUpload = tasks.filter(
+  // Hitung jumlah tugas yang masih Aktif (Approved atau Revision)
+  const activeTaskCount = tasks.filter(
     (t) => t.status === "Approved" || t.status === "Revision"
-  );
+  ).length;
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
       <h1 className="text-2xl font-bold text-gray-800 mb-4">
-        Tugas Saya ({tasksReadyForUpload.length} Aktif)
+        Tugas Saya ({tasks.length} Total, {activeTaskCount} Aktif)
       </h1>
       <p className="mb-6 text-gray-600">
-        Daftar permintaan yang ditugaskan kepada Anda (Status: Approved atau
-        Revision).
+        Daftar permintaan yang ditugaskan kepada Anda, termasuk riwayat tugas
+        yang sudah selesai.
       </p>
 
       {infoMsg && (
@@ -93,9 +97,9 @@ const MyTasks = () => {
         </div>
       )}
 
-      {tasksReadyForUpload.length === 0 ? (
+      {tasks.length === 0 ? (
         <div className="p-10 text-center text-gray-500 border-2 border-dashed rounded-lg">
-          Tidak ada tugas desain aktif saat ini.
+          Tidak ada tugas desain saat ini.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -120,43 +124,54 @@ const MyTasks = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {tasksReadyForUpload.map((task) => (
-                <tr key={task.request_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {task.title}
-                    <div className="text-xs text-gray-500">{task.category}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {task.requester ? task.requester.full_name : "N/A"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(task.deadline).toLocaleDateString("id-ID", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <span
-                      className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                        task.status
-                      )}`}
-                    >
-                      {task.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => setSelectedTaskToUpload(task)}
-                      className="text-purple-600 hover:text-purple-900 disabled:opacity-50 inline-flex items-center space-x-1"
-                      title="Unggah Hasil Desain"
-                    >
-                      <Upload className="w-5 h-5" />
-                      <span>Unggah</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {tasks.map(
+                (
+                  task // <-- Iterasi semua tasks (termasuk Completed)
+                ) => (
+                  <tr key={task.request_id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {task.title}
+                      <div className="text-xs text-gray-500">
+                        {task.category}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {task.requester ? task.requester.full_name : "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(task.deadline).toLocaleDateString("id-ID", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span
+                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                          task.status
+                        )}`}
+                      >
+                        {task.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {task.status === "Approved" ||
+                      task.status === "Revision" ? (
+                        <button
+                          onClick={() => setSelectedTaskToUpload(task)}
+                          className="text-purple-600 hover:text-purple-900 disabled:opacity-50 inline-flex items-center space-x-1"
+                          title="Unggah Hasil Desain"
+                        >
+                          <Upload className="w-5 h-5" />
+                          <span>Unggah</span>
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">N/A</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              )}
             </tbody>
           </table>
         </div>

@@ -3,7 +3,20 @@ import { fetchMyRequests } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import EditRequestModal from "./EditRequestModal";
 import ReviewRequestModal from "./ReviewRequestModal";
+import RequestPreviewModal from "./RequestPreviewModal";
 import { Edit, Eye } from "lucide-react";
+
+// Helper function untuk format tanggal dan waktu (hh:mm)
+const formatDateTime = (isoString) => {
+  if (!isoString) return "N/A";
+  return new Date(isoString).toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit", // <-- Ditambahkan hh:mm
+  });
+};
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -15,6 +28,7 @@ const getStatusColor = (status) => {
     case "For Review":
       return "bg-blue-100 text-blue-800";
     case "Revision":
+    case "Rejected":
       return "bg-red-100 text-red-800";
     case "Completed":
       return "bg-green-100 text-green-800";
@@ -32,6 +46,8 @@ const MyRequests = () => {
   const [error, setError] = useState(null);
   const [selectedRequestToEdit, setSelectedRequestToEdit] = useState(null);
   const [selectedRequestToReview, setSelectedRequestToReview] = useState(null);
+  const [selectedRequestToPreview, setSelectedRequestToPreview] =
+    useState(null);
   const [infoMsg, setInfoMsg] = useState(null);
 
   const loadRequests = async () => {
@@ -57,6 +73,7 @@ const MyRequests = () => {
     setInfoMsg(message);
     setSelectedRequestToEdit(null);
     setSelectedRequestToReview(null);
+    setSelectedRequestToPreview(null);
     loadRequests();
   };
 
@@ -84,8 +101,8 @@ const MyRequests = () => {
       </h1>
       <p className="mb-6 text-gray-600">
         Anda dapat mengedit/membatalkan permintaan berstatus{" "}
-        <strong>Submitted</strong> atau meninjau hasil desain berstatus{" "}
-        <strong>For Review</strong>.
+        <strong>Submitted</strong> atau <strong>Rejected</strong> atau meninjau
+        hasil desain berstatus <strong>For Review</strong>.
       </p>
 
       {infoMsg && (
@@ -110,6 +127,12 @@ const MyRequests = () => {
                   Kategori
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Designer
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tanggal Dibuat
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tenggat Waktu
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -130,11 +153,13 @@ const MyRequests = () => {
                     {req.category}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(req.deadline).toLocaleDateString("id-ID", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {req.designer ? req.designer.full_name : "Belum Ditugaskan"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDateTime(req.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDateTime(req.deadline)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
@@ -145,7 +170,8 @@ const MyRequests = () => {
                       {req.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                    {/* Aksi 1: Review (For Review Status - Prioritas Tertinggi) */}
                     {isReviewable(req.status) ? (
                       <button
                         onClick={() => setSelectedRequestToReview(req)}
@@ -155,16 +181,31 @@ const MyRequests = () => {
                         <Eye className="w-5 h-5 inline-block" />
                         <span>Review</span>
                       </button>
-                    ) : isEditable(req.status) ? (
-                      <button
-                        onClick={() => setSelectedRequestToEdit(req)}
-                        className="text-purple-600 hover:text-purple-900 disabled:opacity-50"
-                        title="Edit atau Batalkan Permintaan"
-                      >
-                        <Edit className="w-5 h-5 inline-block" />
-                      </button>
                     ) : (
-                      <span className="text-gray-400">N/A</span>
+                      // Aksi 2: Edit (Submitted/Rejected Status)
+                      isEditable(req.status) && (
+                        <button
+                          onClick={() => setSelectedRequestToEdit(req)}
+                          className="text-purple-600 hover:text-purple-900 disabled:opacity-50 inline-flex items-center space-x-1"
+                          title="Edit atau Batalkan Permintaan"
+                        >
+                          <Edit className="w-5 h-5 inline-block" />
+                        </button>
+                      )
+                    )}
+
+                    {/* Aksi 3: View (Selalu ada, kecuali jika Review yang aktif) */}
+                    {/* Jika statusnya For Review, tombol Review sudah mencakup fungsi view */}
+                    {!isReviewable(req.status) && (
+                      <button
+                        onClick={() => setSelectedRequestToPreview(req)}
+                        className={`text-gray-500 hover:text-gray-700 disabled:opacity-50 inline-flex items-center space-x-1 ${
+                          isEditable(req.status) ? "ml-3" : ""
+                        }`}
+                        title="Lihat Detail Brief dan Referensi"
+                      >
+                        <Eye className="w-5 h-5 inline-block" />
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -193,6 +234,13 @@ const MyRequests = () => {
             onSuccess={handleSuccess}
           />
         )}
+
+      {selectedRequestToPreview && (
+        <RequestPreviewModal
+          request={selectedRequestToPreview}
+          onClose={() => setSelectedRequestToPreview(null)}
+        />
+      )}
     </div>
   );
 };

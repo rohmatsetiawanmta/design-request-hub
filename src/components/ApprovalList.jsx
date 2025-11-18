@@ -99,12 +99,12 @@ const ApprovalList = () => {
       return;
     }
 
-    // Alur untuk Revision (FR-04 Alternate Flow)
+    // Alur untuk Rejected (sebelumnya Revision)
     setProcessingId(requestId);
     setInfoMsg(null);
     if (
       !window.confirm(
-        "Yakin ingin mengembalikan permintaan ini untuk direvisi?"
+        "Yakin ingin MENOLAK permintaan ini? Requester harus merevisi brief."
       )
     ) {
       setProcessingId(null);
@@ -112,9 +112,11 @@ const ApprovalList = () => {
     }
 
     try {
-      // Update status menjadi Revision
-      await updateRequest(requestId, { status: "Revision" });
-      setInfoMsg("Permintaan dikembalikan untuk revisi (Revision).");
+      // Update status menjadi Rejected
+      await updateRequest(requestId, { status: "Rejected" });
+      setInfoMsg(
+        "Permintaan DITOLAK (Rejected). Requester harus memperbaiki brief."
+      );
       loadRequests();
     } catch (error) {
       console.error(`Gagal ${actionType} permintaan:`, error);

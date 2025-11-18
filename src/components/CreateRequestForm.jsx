@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { createRequest, uploadReferenceFile } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 
@@ -7,7 +7,7 @@ const initialFormState = {
   description: "",
   category: "Graphic",
   deadline: "",
-  referenceFile: null,
+  referenceFile: null, // Hanya file yang tersisa
 };
 
 const CreateRequestForm = () => {
@@ -16,9 +16,9 @@ const CreateRequestForm = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const fileInputRef = useRef(null); // Ref untuk mengontrol input file
 
   const categories = ["Graphic", "Motion", "Game UI", "Other"];
-
   const categoriesRequiringReference = ["Motion", "Game UI"];
 
   const handleChange = (e) => {
@@ -27,8 +27,11 @@ const CreateRequestForm = () => {
   };
 
   const handleFileChange = (e) => {
+    // Sederhanakan: hanya tangani file
     setFormData((prev) => ({ ...prev, referenceFile: e.target.files[0] }));
   };
+
+  // Fungsi handleUrlChange Dihapus
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +60,7 @@ const CreateRequestForm = () => {
       return;
     }
 
+    // LOGIKA VALIDASI: Hanya cek file jika diperlukan
     if (
       categoriesRequiringReference.includes(formData.category) &&
       !formData.referenceFile
@@ -72,6 +76,7 @@ const CreateRequestForm = () => {
 
     try {
       if (formData.referenceFile) {
+        // Hanya proses file upload
         const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
         if (formData.referenceFile.size > MAX_FILE_SIZE) {
           throw new Error("Ukuran file melebihi batas maksimum 5MB.");
@@ -80,6 +85,8 @@ const CreateRequestForm = () => {
         fileUrl = await uploadReferenceFile(formData.referenceFile, user.id);
         console.log("File referensi berhasil diunggah:", fileUrl);
       }
+
+      // Logika untuk referenceUrl telah dihapus
 
       const requestData = {
         title: formData.title,
@@ -93,7 +100,12 @@ const CreateRequestForm = () => {
       setSuccessMsg(
         `Permintaan "${newRequest.title}" berhasil dibuat dengan status Submitted.`
       );
+
+      // RESET FORM: Reset state dan clear input file secara eksplisit
       setFormData(initialFormState);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = null; // Clear file input
+      }
     } catch (error) {
       console.error("Gagal membuat permintaan:", error);
       setErrorMsg(
@@ -122,6 +134,7 @@ const CreateRequestForm = () => {
       )}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
+        {/* Judul */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Judul Permintaan <span className="text-red-500">*</span>
@@ -137,6 +150,7 @@ const CreateRequestForm = () => {
           />
         </div>
 
+        {/* Deskripsi */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Deskripsi/Brief Singkat
@@ -152,6 +166,7 @@ const CreateRequestForm = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
+          {/* Kategori */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Kategori Desain <span className="text-red-500">*</span>
@@ -172,6 +187,7 @@ const CreateRequestForm = () => {
             </select>
           </div>
 
+          {/* Tenggat Waktu */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Tenggat Waktu <span className="text-red-500">*</span>
@@ -188,6 +204,7 @@ const CreateRequestForm = () => {
           </div>
         </div>
 
+        {/* BAGIAN UNGGAH REFERENSI (Hanya File) */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Unggah Referensi Desain
@@ -197,6 +214,7 @@ const CreateRequestForm = () => {
           </label>
           <input
             type="file"
+            ref={fileInputRef}
             onChange={handleFileChange}
             className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
             disabled={loading}

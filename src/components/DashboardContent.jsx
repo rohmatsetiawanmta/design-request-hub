@@ -16,6 +16,7 @@ const getStatusColor = (status) => {
       return "bg-purple-100 text-purple-800";
     case "For Review":
     case "Revision":
+    case "Rejected":
       return "bg-red-100 text-red-800";
     case "Completed":
       return "bg-green-100 text-green-800";
