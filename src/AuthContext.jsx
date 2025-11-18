@@ -113,6 +113,32 @@ export const AuthProvider = ({ children }) => {
   const currentUserId = session?.user?.id;
   const currentUserRole = userProfile?.role;
 
+  // LOGIKA REALTIME UNTUK BADGE NOTIFIKASI
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const channel = supabase
+      .channel("notification_badge_channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          loadNotificationCount(currentUserId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, loadNotificationCount]);
+
+  // LOGIKA REALTIME UNTUK BADGE SIDEBAR
   useEffect(() => {
     if (!currentUserId || !currentUserRole) return;
 
@@ -142,9 +168,6 @@ export const AuthProvider = ({ children }) => {
             relevantStatuses.includes(newStatus) ||
             relevantStatuses.includes(oldStatus)
           ) {
-            console.log(
-              "Realtime request status update received, reloading sidebar badges."
-            );
             loadSidebarBadgeCounts(currentUserId, currentUserRole);
           }
         }
@@ -157,9 +180,6 @@ export const AuthProvider = ({ children }) => {
           table: "requests",
         },
         () => {
-          console.log(
-            "Realtime request insert received, reloading sidebar badges."
-          );
           loadSidebarBadgeCounts(currentUserId, currentUserRole);
         }
       )
