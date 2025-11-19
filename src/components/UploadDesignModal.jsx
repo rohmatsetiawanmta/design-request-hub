@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { uploadDesignAsset, updateRequest } from "../supabaseClient";
+import {
+  uploadDesignAsset,
+  updateRequest,
+  runAIQC, // <-- IMPORT BARU: Pemicu QC AI
+} from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import { X } from "lucide-react";
 
@@ -35,18 +39,33 @@ const UploadDesignModal = ({ task, onClose, onSuccess }) => {
 
       const newStatus = "For Review";
 
+      // 1. UPDATE REQUEST STATUS DAN URL
       await updateRequest(task.request_id, {
         status: newStatus,
-        latest_design_url: fileUrl, // Kolom baru
-        designer_notes: notes, // Kolom baru
-        version_no: newVersionNo, // Kolom baru
+        latest_design_url: fileUrl,
+        designer_notes: notes,
+        version_no: newVersionNo,
       });
 
-      onSuccess(
-        `Hasil desain ${
-          isRevision ? "revisi ke-" + newVersionNo : "awal"
-        } berhasil diunggah. Status diubah menjadi 'For Review'.`
+      const aiReport = await runAIQC(
+        task.request_id,
+        newVersionNo,
+        task.title,
+        task.description,
+        isRevision
       );
+
+      let successMessage = `Hasil desain ${
+        isRevision ? "revisi ke-" + newVersionNo : "awal"
+      } berhasil diunggah. Status diubah menjadi 'For Review'.`;
+
+      if (aiReport.issue_count > 0) {
+        successMessage += ` Peringatan: QC Otomatis menemukan ${aiReport.issue_count} potensi isu (Ejaan/CV). Reviewer akan meninjau.`;
+      } else {
+        successMessage += ` QC Otomatis bersih.`;
+      }
+
+      onSuccess(successMessage);
       onClose();
     } catch (error) {
       console.error("Gagal mengunggah desain:", error);

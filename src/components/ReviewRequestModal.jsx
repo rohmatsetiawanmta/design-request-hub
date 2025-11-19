@@ -1,15 +1,42 @@
-// src/components/ReviewRequestModal.jsx
-
-import React, { useState } from "react";
-import { submitReviewAndChangeStatus, archiveDesign } from "../supabaseClient";
+import React, { useState, useEffect } from "react";
+import {
+  submitReviewAndChangeStatus,
+  archiveDesign,
+  fetchQCReport,
+} from "../supabaseClient";
 import { useAuth } from "../AuthContext";
-import { X, ExternalLink, Send } from "lucide-react";
+import {
+  X,
+  ExternalLink,
+  Send,
+  AlertTriangle,
+  CheckSquare,
+} from "lucide-react";
 
 const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
   const { user } = useAuth();
   const [feedbackText, setFeedbackText] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [aiReport, setAiReport] = useState(null);
+  const [loadingReport, setLoadingReport] = useState(true);
+
+  const currentVersion = request.version_no || 1;
+
+  useEffect(() => {
+    const loadReport = async () => {
+      setLoadingReport(true);
+      try {
+        const report = await fetchQCReport(request.request_id, currentVersion);
+        setAiReport(report);
+      } catch (err) {
+        console.error("Gagal memuat laporan QC AI:", err);
+      } finally {
+        setLoadingReport(false);
+      }
+    };
+    loadReport();
+  }, [request.request_id, currentVersion]);
 
   const handleRevision = async () => {
     setErrorMsg("");
@@ -89,7 +116,7 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
       <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6 border-b pb-3">
           <h2 className="text-xl font-bold text-gray-800">
-            Tinjau Desain: {request.title} (V{request.version_no || 1})
+            Tinjau Desain: {request.title} (V{currentVersion})
           </h2>
           <button
             onClick={onClose}
@@ -105,6 +132,60 @@ const ReviewRequestModal = ({ request, onClose, onSuccess }) => {
             {errorMsg}
           </div>
         )}
+
+        <div className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-100">
+          <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+            <CheckSquare className="w-5 h-5 mr-2 text-purple-600" />
+            Laporan QC Otomatis (AI)
+          </h4>
+
+          {loadingReport ? (
+            <p className="text-sm text-gray-500 italic">
+              Memuat hasil analisis AI...
+            </p>
+          ) : aiReport ? (
+            <div className="space-y-3">
+              <div className="text-sm">
+                <p
+                  className={`font-medium ${
+                    aiReport.issue_count > 0 ? "text-red-700" : "text-green-700"
+                  }`}
+                >
+                  {aiReport.issue_count > 0 ? (
+                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                  ) : (
+                    <CheckSquare className="w-4 h-4 inline mr-1" />
+                  )}
+                  Status Ejaan/Bahasa:{" "}
+                  {aiReport.issue_count > 0
+                    ? `${aiReport.issue_count} Isu Ditemukan`
+                    : "Bersih"}
+                </p>
+
+                {aiReport.nlp_findings_array?.length > 0 && (
+                  <ul className="list-disc list-inside text-xs text-red-600 ml-4 mt-1">
+                    {aiReport.nlp_findings_array.map((issue, index) => (
+                      <li key={index}>{issue}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {aiReport.cv_diff_ref !== "NONE" && (
+                <p className="text-sm text-gray-700">
+                  <strong>Perbandingan Visual:</strong> {aiReport.cv_diff_ref}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 italic border-t pt-2 mt-2">
+                {aiReport.ocr_text}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic">
+              Laporan QC Otomatis (V{currentVersion}) belum tersedia.
+            </p>
+          )}
+        </div>
 
         <div className="mb-6 space-y-3">
           <p className="text-sm font-medium text-gray-700">

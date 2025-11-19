@@ -1,5 +1,3 @@
-// src/supabaseClient.js
-
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -91,7 +89,6 @@ export async function uploadDesignAsset(file, requestId, userId) {
   return publicUrlData.publicUrl;
 }
 
-// FUNGSI BARU: Mengambil ID pengguna yang berhak menyetujui (PRODUCER/MGMT/ADMIN)
 export async function fetchApproverRecipients() {
   const { data, error } = await supabase
     .from("users")
@@ -150,7 +147,6 @@ export async function createRequest(requestData, requesterId) {
     throw error;
   }
 
-  // >>> LOGIKA NOTIFIKASI: Permintaan Dibuat (UC-15) <<<
   const approverIds = await fetchApproverRecipients();
   const message = `Permintaan baru [${data.category}] "${data.title}" telah dibuat dan menunggu persetujuan.`;
 
@@ -162,7 +158,6 @@ export async function createRequest(requestData, requesterId) {
       approverIds
     );
   }
-  // >>> AKHIR LOGIKA NOTIFIKASI <<<
 
   return data;
 }
@@ -230,29 +225,24 @@ export async function updateRequest(requestId, updates) {
   if (recipients.length > 0) {
     await sendNotification(data.request_id, eventType, message, recipients);
   }
-  // --- AKHIR LOGIKA NOTIFIKASI ---
 
   return data;
 }
 
-// --------------------------------------------------------------------------------
-// FUNGSI UNTUK REVIEW/FEEDBACK/COMPLETE (UC-08 & UC-10)
-// --------------------------------------------------------------------------------
 export async function submitReviewAndChangeStatus(
   requestId,
   commenterId,
-  versionNo, // Versi desain yang sedang di-review
-  feedbackText, // Catatan (bisa kosong untuk Complete)
-  newStatus // Status baru: "Revision" atau "Completed"
+  versionNo,
+  feedbackText,
+  newStatus
 ) {
-  // 1. Catat feedback ke tabel 'feedback' HANYA JIKA ada teks komentar
   if (feedbackText && feedbackText.trim() !== "") {
     const { error: feedbackError } = await supabase.from("feedback").insert({
       request_id: requestId,
       version_no: versionNo,
       commenter_id: commenterId,
       feedback_text: feedbackText.trim(),
-      status_change: newStatus, // Mencatat outcome review (Revision/Completed)
+      status_change: newStatus,
     });
 
     if (feedbackError) {
@@ -261,7 +251,6 @@ export async function submitReviewAndChangeStatus(
     }
   }
 
-  // 2. Perbarui status permintaan di tabel 'requests'
   const updates = { status: newStatus };
 
   const { data, error: updateError } = await supabase
@@ -284,7 +273,6 @@ export async function submitReviewAndChangeStatus(
     );
   }
 
-  // --- LOGIKA NOTIFIKASI ---
   const requesterId = data.requester.id;
   const designerId = data.designer.id;
 
@@ -304,7 +292,6 @@ export async function submitReviewAndChangeStatus(
   if (recipients.length > 0) {
     await sendNotification(data.request_id, eventType, message, recipients);
   }
-  // --- AKHIR LOGIKA NOTIFIKASI ---
 
   const finalDesignUrl = data.latest_design_url;
   if (newStatus === "Completed" && finalDesignUrl) {
@@ -313,19 +300,6 @@ export async function submitReviewAndChangeStatus(
 
   return data;
 }
-// --------------------------------------------------------------------------------
-// FUNGSI SIMULASI UC-12: Save QC Report
-export async function saveQCReport(reportData) {
-  // Simulates saving a QC report based on AI findings (OCR/NLP/CV)
-  const { error } = await supabase.from("qc_reports").insert(reportData);
-
-  if (error) {
-    console.error("Error saving QC Report:", error);
-    // Asumsi: Error ini ditoleransi agar alur utama tidak terhenti jika tabel belum ada.
-  }
-  return true;
-}
-
 export async function archiveDesign(requestId, finalDesignUrl) {
   const { error } = await supabase.from("archive").insert({
     request_id: requestId,
@@ -342,417 +316,6 @@ export async function fetchDesigners() {
   const { data, error } = await supabase
     .from("users")
     .select("id, full_name")
-    .eq("role", "DESIGNER")
-    .eq("is_active", true); // <--- FILTER BARU: HANYA DESAINER AKTIF
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-
-// --------------------------------------------------------------------------------
-// FUNGSI MODIFIKASI UC-11: Fetch Dashboard Data dengan Filter
-// --------------------------------------------------------------------------------
-export async function fetchDashboardData(filters = {}) {
-  let query = supabase
-    .from("requests")
-    .select(
-      "request_id, title, category, deadline, status, designer_id, designers:users!designer_id(full_name)"
-    )
-    .order("created_at", { ascending: false });
-
-  // Implementasi filter sederhana (FR-15)
-  if (filters.category && filters.category !== "All") {
-    query = query.eq("category", filters.category);
-  }
-
-  if (filters.designerId) {
-    query = query.eq("designer_id", filters.designerId);
-  }
-
-  if (filters.startDate) {
-    query = query.gte("created_at", filters.startDate);
-  }
-
-  if (filters.endDate) {
-    query = query.lte("created_at", filters.endDate);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-// --------------------------------------------------------------------------------
-// FUNGSI BARU UC-11: Fetch Revision Counts untuk Analisis
-// --------------------------------------------------------------------------------
-export async function fetchRevisionCounts(filters = {}) {
-  let query = supabase
-    .from("feedback")
-    .select("request_id")
-    .eq("status_change", "Revision");
-
-  // Filter di sini bisa ditambahkan berdasarkan filter waktu jika diperlukan
-  // Untuk saat ini, kita hanya fokus pada status 'Revision'
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-// --------------------------------------------------------------------------------
-
-export async function fetchRequestsForApproval() {
-  const approvalStatuses = ["Submitted"];
-
-  const { data, error } = await supabase
-    .from("requests")
-    .select(
-      `
-      request_id, 
-      title, 
-      category, 
-      deadline, 
-      status, 
-      description,
-      reference_url,
-      requester_info:users!requester_id ( 
-          full_name
-      )
-    `
-    )
-    .in("status", approvalStatuses)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-
-export async function fetchMyTasks(designerId) {
-  const activeStatuses = ["Approved", "In Progress", "Revision", "Completed"];
-
-  const { data, error } = await supabase
-    .from("requests")
-    .select(
-      `
-      request_id, 
-      title, 
-      category, 
-      deadline, 
-      status, 
-      version_no,  
-      requester:users!requester_id(full_name),
-      reference_url 
-    `
-    )
-    .eq("designer_id", designerId)
-    .in("status", activeStatuses)
-    .order("deadline", { ascending: true });
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-
-export async function fetchActiveRequestsForTable() {
-  const activeStatuses = [
-    "Submitted",
-    "Approved",
-    "In Progress",
-    "For Review",
-    "Revision",
-  ];
-
-  const { data, error } = await supabase
-    .from("requests")
-    .select(
-      `
-            request_id, 
-            title, 
-            category, 
-            deadline, 
-            status, 
-            designer:users!designer_id ( 
-                full_name
-            )
-        `
-    )
-    .in("status", activeStatuses)
-    .order("deadline", { ascending: true })
-    .limit(5);
-
-  if (error) {
-    console.error("Error fetching active requests for table:", error);
-    throw error;
-  }
-  return data;
-}
-
-export async function fetchAllUsers() {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, full_name, email, role, is_active")
-    .order("full_name", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching all users:", error);
-    throw error;
-  }
-  return data;
-}
-
-export async function updateUserRoleAndStatus(
-  userId,
-  newRole,
-  isActive,
-  changerId // ARGUMEN BARU UNTUK AUDIT
-) {
-  const updates = {
-    role: newRole,
-    is_active: isActive,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data: oldUser } = await supabase
-    .from("users")
-    .select("role, is_active")
-    .eq("id", userId)
-    .single();
-
-  const { data: updatedUser, error: updateError } = await supabase
-    .from("users")
-    .update(updates)
-    .eq("id", userId)
-    .select()
-    .single();
-
-  if (updateError) {
-    console.error("Error updating user role/status:", updateError);
-    throw updateError;
-  }
-
-  let actionType = "USER_UPDATE";
-  let description = `Pengguna ${updatedUser.full_name} diperbarui.`;
-
-  if (oldUser.is_active && !isActive) {
-    actionType = "DEACTIVATION";
-    description = `Pengguna ${updatedUser.full_name} dinonaktifkan.`;
-  } else if (!oldUser.is_active && isActive) {
-    actionType = "REACTIVATION";
-    description = `Pengguna ${updatedUser.full_name} diaktifkan kembali.`;
-  } else if (oldUser.role !== newRole) {
-    actionType = "ROLE_CHANGE";
-    description = `Peran pengguna ${updatedUser.full_name} diubah dari ${oldUser.role} menjadi ${newRole}.`;
-  }
-
-  const { error: logError } = await supabase.from("audit_logs").insert({
-    changer_id: changerId,
-    target_user_id: userId,
-    action_type: actionType,
-    old_value: oldUser, // Catat nilai lama
-    new_value: { role: updatedUser.role, is_active: updatedUser.is_active }, // Catat nilai baru
-    description: description,
-  });
-
-  if (logError) {
-    console.warn("Gagal mencatat audit log:", logError);
-  }
-
-  return updatedUser;
-}
-
-export async function fetchAuditLogs() {
-  const { data, error } = await supabase
-    .from("audit_logs")
-    .select(
-      `
-      timestamp,
-      action_type,
-      description,
-      old_value,
-      new_value,
-      changer:changer_id(full_name),
-      target_user:target_user_id(full_name)
-      `
-    )
-    .order("timestamp", { ascending: false }); // Urutkan dari yang terbaru
-
-  if (error) {
-    console.error("Error fetching audit logs:", error);
-    throw error;
-  }
-  return data;
-}
-
-export async function createNewUserByAdmin(email, password, fullName, role) {
-  const { data, error } = await supabase.functions.invoke("admin-create-user", {
-    method: "POST",
-    body: { email, password, fullName, role },
-  });
-
-  if (error) {
-    throw new Error(`Panggilan Edge Function gagal: ${error.message}`);
-  }
-
-  if (data.error) {
-    throw new Error(
-      data.error.message || "Gagal membuat pengguna melalui server."
-    );
-  }
-
-  return data.user;
-}
-
-export async function fetchUnreadNotificationCount(userId) {
-  const { count, error } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .is("read_at", null);
-
-  if (error) {
-    console.error("Error fetching unread notification count:", error);
-    return 0;
-  }
-  return count;
-}
-
-export async function fetchRecentNotifications(userId) {
-  const { data, error } = await supabase
-    .from("notifications")
-    .select(
-      `
-      id, 
-      message, 
-      sent_at, 
-      read_at,
-      event_type,
-      request_id,
-      requests (title)
-    `
-    )
-    .eq("user_id", userId)
-    .order("sent_at", { ascending: false })
-    .limit(50); // Batasan untuk menampilkan riwayat
-
-  if (error) {
-    throw error;
-  }
-  return data;
-}
-
-export async function markNotificationsAsRead(userId, notificationIds) {
-  // Tipe event yang bersifat shared responsibility (untuk Approver/Admin)
-  const SHARED_EVENTS = ["REQUEST_CREATED", "REQUEST_APPROVED"];
-
-  // Jika hanya satu ID yang ditandai, cek apakah itu event bersama
-  if (notificationIds.length === 1) {
-    const notifId = notificationIds[0];
-    const { data: notifData, error: fetchError } = await supabase
-      .from("notifications")
-      .select("request_id, event_type")
-      .eq("id", notifId)
-      .single();
-
-    if (
-      !fetchError &&
-      notifData &&
-      SHARED_EVENTS.includes(notifData.event_type)
-    ) {
-      // 1. Dapatkan semua notifikasi terkait event ini yang belum dibaca
-      const { data: allRelatedUnread, error: relatedError } = await supabase
-        .from("notifications")
-        .select("id")
-        .eq("request_id", notifData.request_id)
-        .eq("event_type", notifData.event_type)
-        .is("read_at", null)
-        .in("user_id", await fetchApproverRecipients()); // Hanya berlaku untuk Approver/Admin
-
-      if (relatedError)
-        throw new Error("Gagal mengidentifikasi notifikasi terkait.");
-
-      const allIdsToMark = allRelatedUnread.map((n) => n.id);
-
-      // 2. Tandai SEMUA notifikasi terkait sebagai sudah dibaca (Group Read)
-      const { error: groupUpdateError } = await supabase
-        .from("notifications")
-        .update({ read_at: new Date().toISOString() })
-        .in("id", allIdsToMark);
-
-      if (groupUpdateError) throw groupUpdateError;
-      return true;
-    }
-  }
-
-  const { error } = await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .in("id", notificationIds)
-    .eq("user_id", userId);
-
-  if (error) {
-    throw error;
-  }
-  return true;
-}
-
-export async function fetchSubmittedRequestCount() {
-  const { count, error } = await supabase
-    .from("requests")
-    .select("request_id", { count: "exact", head: true })
-    .eq("status", "Submitted");
-
-  if (error) {
-    console.error("Error fetching submitted count:", error);
-    return 0;
-  }
-  return count;
-}
-
-export async function fetchMyTaskCount(userId) {
-  const activeStatuses = ["Approved", "Revision"];
-
-  const { count, error } = await supabase
-    .from("requests")
-    .select("request_id", { count: "exact", head: true })
-    .eq("designer_id", userId)
-    .in("status", activeStatuses);
-
-  if (error) {
-    console.error("Error fetching my task count:", error);
-    return 0;
-  }
-  return count;
-}
-
-export async function fetchMyReviewCount(userId) {
-  const reviewStatus = "For Review";
-
-  const { count, error } = await supabase
-    .from("requests")
-    .select("request_id", { count: "exact", head: true })
-    .eq("requester_id", userId)
-    .eq("status", reviewStatus);
-
-  if (error) {
-    console.error("Error fetching my review count:", error);
-    return 0;
-  }
-  return count;
-}
-
-export async function fetchActiveDesigners() {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, full_name, role")
     .eq("role", "DESIGNER")
     .eq("is_active", true);
 
@@ -859,6 +422,243 @@ export async function reassignDesigner(
   return request;
 }
 
+const SIMULATED_AI_ISSUES = [
+  "typo: 'disain' (harus 'desain')",
+  "KBBI: 'kwalitas' (harus 'kualitas')",
+  "Inkonsistensi warna: Background tidak sesuai brand guide (CV Mock)",
+  "EyD: Kurang spasi setelah koma pada judul",
+];
+
+// FUNGSI BARU: Simulasi menjalankan AI QC (UC-12)
+export async function runAIQC(
+  requestId,
+  versionNo,
+  title,
+  description,
+  isRevision
+) {
+  const textToAnalyze = `${title} ${description || ""}`.toLowerCase();
+
+  const hasError = Math.random() < 0.6;
+
+  let findings = {
+    ocr_text: `Simulasi OCR: Ditemukan teks utama dari brief dan beberapa kata di desain: ${textToAnalyze.slice(
+      0,
+      50
+    )}...`,
+    nlp_findings: [],
+    cv_diff_ref: "NONE",
+    issue_count: 0,
+    is_revision: isRevision,
+  };
+
+  if (hasError) {
+    const numIssues = Math.floor(Math.random() * 3) + 1;
+    for (let i = 0; i < numIssues; i++) {
+      const issue =
+        SIMULATED_AI_ISSUES[
+          Math.floor(Math.random() * SIMULATED_AI_ISSUES.length)
+        ];
+      if (!findings.nlp_findings.includes(issue)) {
+        findings.nlp_findings.push(issue);
+      }
+    }
+    findings.issue_count = findings.nlp_findings.length;
+
+    if (isRevision) {
+      if (Math.random() < 0.7) {
+        findings.cv_diff_ref = `Perbedaan visual signifikan (85%) terdeteksi antara V${
+          versionNo - 1
+        } dan V${versionNo}.`;
+      } else {
+        findings.cv_diff_ref = `Perbedaan visual minor (10%) terdeteksi antara V${
+          versionNo - 1
+        } dan V${versionNo}.`;
+      }
+    }
+  }
+
+  await saveQCReport({
+    request_id: requestId,
+    version_no: versionNo,
+    ocr_text: findings.ocr_text,
+    nlp_findings: findings.nlp_findings.join("; "),
+    cv_diff_ref: findings.cv_diff_ref,
+    issue_count: findings.issue_count,
+    reviewed_at: new Date().toISOString(),
+  });
+
+  return findings;
+}
+
+export async function fetchQCReport(requestId, versionNo) {
+  const { data, error } = await supabase
+    .from("qc_reports")
+    .select("*")
+    .eq("request_id", requestId)
+    .eq("version_no", versionNo)
+    .order("reviewed_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    console.error("Error fetching QC report:", error);
+    throw error;
+  }
+
+  if (data) {
+    data.nlp_findings_array = data.nlp_findings
+      ? data.nlp_findings.split("; ")
+      : [];
+  }
+
+  return data;
+}
+
+export async function saveQCReport(reportData) {
+  const { error } = await supabase.from("qc_reports").insert(reportData);
+
+  if (error) {
+    console.error("Error saving QC Report:", error);
+  }
+  return true;
+}
+
+export async function fetchDashboardData(filters = {}) {
+  let query = supabase
+    .from("requests")
+    .select(
+      "request_id, title, category, deadline, status, designer_id, designers:users!designer_id(full_name)"
+    )
+    .order("created_at", { ascending: false });
+
+  if (filters.category && filters.category !== "All") {
+    query = query.eq("category", filters.category);
+  }
+
+  if (filters.designerId) {
+    query = query.eq("designer_id", filters.designerId);
+  }
+
+  if (filters.startDate) {
+    query = query.gte("created_at", filters.startDate);
+  }
+
+  if (filters.endDate) {
+    query = query.lte("created_at", filters.endDate);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchRevisionCounts(filters = {}) {
+  let query = supabase
+    .from("feedback")
+    .select("request_id")
+    .eq("status_change", "Revision");
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchRequestsForApproval() {
+  const approvalStatuses = ["Submitted"];
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      `
+      request_id, 
+      title, 
+      category, 
+      deadline, 
+      status, 
+      description,
+      reference_url,
+      requester_info:users!requester_id ( 
+          full_name
+      )
+    `
+    )
+    .in("status", approvalStatuses)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchMyTasks(designerId) {
+  const activeStatuses = ["Approved", "In Progress", "Revision", "Completed"];
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      `
+      request_id, 
+      title, 
+      category, 
+      deadline, 
+      status, 
+      version_no,  
+      requester:users!requester_id(full_name),
+      reference_url 
+    `
+    )
+    .eq("designer_id", designerId)
+    .in("status", activeStatuses)
+    .order("deadline", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchActiveRequestsForTable() {
+  const activeStatuses = [
+    "Submitted",
+    "Approved",
+    "In Progress",
+    "For Review",
+    "Revision",
+  ];
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      `
+            request_id, 
+            title, 
+            category, 
+            deadline, 
+            status, 
+            designer:users!designer_id ( 
+                full_name
+            )
+        `
+    )
+    .in("status", activeStatuses)
+    .order("deadline", { ascending: true })
+    .limit(5);
+
+  if (error) {
+    console.error("Error fetching active requests for table:", error);
+    throw error;
+  }
+  return data;
+}
+
 export async function fetchActiveTasksForReassign() {
   const activeStatuses = ["Approved", "In Progress", "Revision"];
 
@@ -884,4 +684,253 @@ export async function fetchActiveTasksForReassign() {
     throw error;
   }
   return data;
+}
+
+export async function fetchAllUsers() {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name, email, role, is_active")
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching all users:", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function updateUserRoleAndStatus(
+  userId,
+  newRole,
+  isActive,
+  changerId
+) {
+  const updates = {
+    role: newRole,
+    is_active: isActive,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: oldUser } = await supabase
+    .from("users")
+    .select("role, is_active")
+    .eq("id", userId)
+    .single();
+
+  const { data: updatedUser, error: updateError } = await supabase
+    .from("users")
+    .update(updates)
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (updateError) {
+    console.error("Error updating user role/status:", updateError);
+    throw updateError;
+  }
+
+  let actionType = "USER_UPDATE";
+  let description = `Pengguna ${updatedUser.full_name} diperbarui.`;
+
+  if (oldUser.is_active && !isActive) {
+    actionType = "DEACTIVATION";
+    description = `Pengguna ${updatedUser.full_name} dinonaktifkan.`;
+  } else if (!oldUser.is_active && isActive) {
+    actionType = "REACTIVATION";
+    description = `Pengguna ${updatedUser.full_name} diaktifkan kembali.`;
+  } else if (oldUser.role !== newRole) {
+    actionType = "ROLE_CHANGE";
+    description = `Peran pengguna ${updatedUser.full_name} diubah dari ${oldUser.role} menjadi ${newRole}.`;
+  }
+
+  const { error: logError } = await supabase.from("audit_logs").insert({
+    changer_id: changerId,
+    target_user_id: userId,
+    action_type: actionType,
+    old_value: oldUser,
+    new_value: { role: updatedUser.role, is_active: updatedUser.is_active },
+    description: description,
+  });
+
+  if (logError) {
+    console.warn("Gagal mencatat audit log:", logError);
+  }
+
+  return updatedUser;
+}
+
+export async function fetchAuditLogs() {
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select(
+      `
+      timestamp,
+      action_type,
+      description,
+      old_value,
+      new_value,
+      changer:changer_id(full_name),
+      target_user:target_user_id(full_name)
+      `
+    )
+    .order("timestamp", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching audit logs:", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function createNewUserByAdmin(email, password, fullName, role) {
+  const { data, error } = await supabase.functions.invoke("admin-create-user", {
+    method: "POST",
+    body: { email, password, fullName, role },
+  });
+
+  if (error) {
+    throw new Error(`Panggilan Edge Function gagal: ${error.message}`);
+  }
+
+  if (data.error) {
+    throw new Error(
+      data.error.message || "Gagal membuat pengguna melalui server."
+    );
+  }
+
+  return data.user;
+}
+
+export async function fetchUnreadNotificationCount(userId) {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .is("read_at", null);
+
+  if (error) {
+    console.error("Error fetching unread notification count:", error);
+    return 0;
+  }
+  return count;
+}
+
+export async function fetchRecentNotifications(userId) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(
+      `
+      id, 
+      message, 
+      sent_at, 
+      read_at,
+      event_type,
+      request_id,
+      requests (title)
+    `
+    )
+    .eq("user_id", userId)
+    .order("sent_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function markNotificationsAsRead(userId, notificationIds) {
+  const SHARED_EVENTS = ["REQUEST_CREATED", "REQUEST_APPROVED"];
+
+  if (notificationIds.length === 1) {
+    const notifId = notificationIds[0];
+    const { data: notifData, error: fetchError } = await supabase
+      .from("notifications")
+      .select("request_id, event_type")
+      .eq("id", notifId)
+      .single();
+
+    if (
+      !fetchError &&
+      notifData &&
+      SHARED_EVENTS.includes(notifData.event_type)
+    ) {
+      const { data: allRelatedUnread, error: relatedError } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("request_id", notifData.request_id)
+        .eq("event_type", notifData.event_type)
+        .is("read_at", null)
+        .in("user_id", await fetchApproverRecipients());
+
+      if (relatedError)
+        throw new Error("Gagal mengidentifikasi notifikasi terkait.");
+
+      const allIdsToMark = allRelatedUnread.map((n) => n.id);
+
+      const { error: groupUpdateError } = await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .in("id", allIdsToMark);
+
+      if (groupUpdateError) throw groupUpdateError;
+      return true;
+    }
+  }
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .in("id", notificationIds)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw error;
+  }
+  return true;
+}
+
+export async function fetchSubmittedRequestCount() {
+  const { count, error } = await supabase
+    .from("requests")
+    .select("request_id", { count: "exact", head: true })
+    .eq("status", "Submitted");
+
+  if (error) {
+    console.error("Error fetching submitted count:", error);
+    return 0;
+  }
+  return count;
+}
+
+export async function fetchMyTaskCount(userId) {
+  const activeStatuses = ["Approved", "Revision"];
+
+  const { count, error } = await supabase
+    .from("requests")
+    .select("request_id", { count: "exact", head: true })
+    .eq("designer_id", userId)
+    .in("status", activeStatuses);
+
+  if (error) {
+    console.error("Error fetching my task count:", error);
+    return 0;
+  }
+  return count;
+}
+
+export async function fetchMyReviewCount(userId) {
+  const reviewStatus = "For Review";
+
+  const { count, error } = await supabase
+    .from("requests")
+    .select("request_id", { count: "exact", head: true })
+    .eq("requester_id", userId)
+    .eq("status", reviewStatus);
+
+  if (error) {
+    console.error("Error fetching my review count:", error);
+    return 0;
+  }
+  return count;
 }
