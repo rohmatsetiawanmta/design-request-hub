@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { fetchMyTasks } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
-import { Upload } from "lucide-react";
+import { Upload, Eye } from "lucide-react";
 import UploadDesignModal from "./UploadDesignModal";
+import RequestPreviewModal from "./RequestPreviewModal";
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -16,7 +17,7 @@ const getStatusColor = (status) => {
       return "bg-red-100 text-red-800";
     case "For Review":
       return "bg-blue-100 text-blue-800";
-    case "Completed": // <-- Tambah warna Completed
+    case "Completed":
       return "bg-green-100 text-green-800";
     default:
       return "bg-gray-100 text-gray-800";
@@ -30,6 +31,7 @@ const MyTasks = () => {
   const [error, setError] = useState(null);
   const [infoMsg, setInfoMsg] = useState(null);
   const [selectedTaskToUpload, setSelectedTaskToUpload] = useState(null);
+  const [selectedTaskToPreview, setSelectedTaskToPreview] = useState(null); // NEW STATE: untuk modal preview
 
   const designerId = user?.id;
 
@@ -76,9 +78,11 @@ const MyTasks = () => {
     );
   }
 
-  // Hitung jumlah tugas yang masih Aktif (Approved atau Revision)
   const activeTaskCount = tasks.filter(
-    (t) => t.status === "Approved" || t.status === "Revision"
+    (t) =>
+      t.status === "Approved" ||
+      t.status === "Revision" ||
+      t.status === "For Review"
   ).length;
 
   return (
@@ -116,6 +120,9 @@ const MyTasks = () => {
                   Tenggat
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Brief
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -124,54 +131,58 @@ const MyTasks = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {tasks.map(
-                (
-                  task // <-- Iterasi semua tasks (termasuk Completed)
-                ) => (
-                  <tr key={task.request_id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      {task.title}
-                      <div className="text-xs text-gray-500">
-                        {task.category}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {task.requester ? task.requester.full_name : "N/A"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(task.deadline).toLocaleDateString("id-ID", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                          task.status
-                        )}`}
+              {tasks.map((task) => (
+                <tr key={task.request_id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    {task.title}
+                    <div className="text-xs text-gray-500">{task.category}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {task.requester ? task.requester.full_name : "N/A"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(task.deadline).toLocaleDateString("id-ID", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                    <button
+                      onClick={() => setSelectedTaskToPreview(task)}
+                      className="text-purple-600 hover:text-purple-900 disabled:opacity-50 inline-flex items-center space-x-1"
+                      title="Lihat Detail Brief dan Referensi"
+                    >
+                      <Eye className="w-5 h-5" />
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span
+                      className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                        task.status
+                      )}`}
+                    >
+                      {task.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {task.status === "Approved" ||
+                    task.status === "Revision" ||
+                    task.status === "For Review" ? (
+                      <button
+                        onClick={() => setSelectedTaskToUpload(task)}
+                        className="text-purple-600 hover:text-purple-900 disabled:opacity-50 inline-flex items-center space-x-1"
+                        title="Unggah Hasil Desain"
                       >
-                        {task.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {task.status === "Approved" ||
-                      task.status === "Revision" ? (
-                        <button
-                          onClick={() => setSelectedTaskToUpload(task)}
-                          className="text-purple-600 hover:text-purple-900 disabled:opacity-50 inline-flex items-center space-x-1"
-                          title="Unggah Hasil Desain"
-                        >
-                          <Upload className="w-5 h-5" />
-                          <span>Unggah</span>
-                        </button>
-                      ) : (
-                        <span className="text-gray-400">N/A</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              )}
+                        <Upload className="w-5 h-5" />
+                        <span>Unggah</span>
+                      </button>
+                    ) : (
+                      <span className="text-gray-400">N/A</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -182,6 +193,13 @@ const MyTasks = () => {
           task={selectedTaskToUpload}
           onClose={() => setSelectedTaskToUpload(null)}
           onSuccess={handleUploadSuccess}
+        />
+      )}
+
+      {selectedTaskToPreview && (
+        <RequestPreviewModal
+          request={selectedTaskToPreview}
+          onClose={() => setSelectedTaskToPreview(null)}
         />
       )}
     </div>

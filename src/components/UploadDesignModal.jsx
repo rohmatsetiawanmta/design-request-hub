@@ -42,11 +42,14 @@ const UploadDesignModal = ({ task, onClose, onSuccess }) => {
         version_no: newVersionNo,
       });
 
+      // --- MODIFIKASI: Menambahkan parameter fileUrl dan task.reference_url ---
       const aiReport = await runAIQC(
         task.request_id,
         newVersionNo,
         task.title,
         task.description,
+        fileUrl, // URL Desain yang baru diunggah
+        task.reference_url, // URL Referensi dari task awal
         isRevision
       );
 
@@ -54,10 +57,13 @@ const UploadDesignModal = ({ task, onClose, onSuccess }) => {
         isRevision ? "revisi ke-" + newVersionNo : "awal"
       } berhasil diunggah. Status diubah menjadi 'For Review'.`;
 
-      if (aiReport && aiReport.issue_count > 0) {
-        successMessage += ` Peringatan: QC Otomatis menemukan ${aiReport.issue_count} potensi isu (Ejaan/CV). Reviewer akan meninjau.`;
-      } else if (aiReport) {
-        successMessage += ` QC Otomatis bersih (0 Isu terdeteksi).`;
+      if (aiReport) {
+        if (aiReport.issue_count > 0) {
+          const nlpSummary = aiReport.nlp_findings.split("; ")[0]; // Ambil temuan pertama
+          successMessage += ` Peringatan QC: Ditemukan ${aiReport.issue_count} isu (cth: ${nlpSummary}). Reviewer akan meninjau.`;
+        } else {
+          successMessage += ` QC Otomatis bersih (0 Isu terdeteksi).`;
+        }
       } else {
         successMessage += ` Peringatan: QC Otomatis sedang diproses atau gagal di server. Reviewer harus melakukan tinjauan manual.`;
       }

@@ -130,11 +130,11 @@ const DashboardContent = () => {
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800">
-            Daftar Permintaan Aktif (Top 5)
+            Daftar Permintaan Aktif (Last 5)
           </h2>
-          <button className="text-sm font-medium text-purple-600 hover:text-purple-700">
+          {/* <button className="text-sm font-medium text-purple-600 hover:text-purple-700">
             Lihat Semua ({totalActiveItems} Item)
-          </button>
+          </button> */}
         </div>
 
         <div className="overflow-x-auto">

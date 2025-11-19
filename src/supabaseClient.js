@@ -418,18 +418,14 @@ export async function reassignDesigner(
   return request;
 }
 
-const SIMULATED_AI_ISSUES = [
-  "typo: 'disain' (harus 'desain')",
-  "KBBI: 'kwalitas' (harus 'kualitas')",
-  "Inkonsistensi warna: Background tidak sesuai brand guide (CV Mock)",
-  "EyD: Kurang spasi setelah koma pada judul",
-];
-
+// --- MODIFIKASI FUNGSI runAIQC UNTUK INTEGRASI GEMINI API ---
 export async function runAIQC(
   requestId,
   versionNo,
   title,
   description,
+  designAssetUrl, // <-- NEW: URL Desain yang akan di-QC
+  referenceUrl, // <-- NEW: URL Referensi (untuk potensi CV/Vision)
   isRevision
 ) {
   const { data, error } = await supabase.functions.invoke("qc-ai-processor", {
@@ -439,6 +435,8 @@ export async function runAIQC(
       versionNo,
       title,
       description,
+      designAssetUrl, // <-- Diteruskan ke Edge Function
+      referenceUrl, // <-- Diteruskan ke Edge Function
       isRevision,
     },
   });
@@ -455,6 +453,7 @@ export async function runAIQC(
 
   return data.aiReport;
 }
+// --- END MODIFIKASI runAIQC ---
 
 export async function fetchQCReport(requestId, versionNo) {
   const { data, error } = await supabase
@@ -564,7 +563,13 @@ export async function fetchRequestsForApproval() {
 }
 
 export async function fetchMyTasks(designerId) {
-  const activeStatuses = ["Approved", "In Progress", "Revision", "Completed"];
+  const activeStatuses = [
+    "Approved",
+    "In Progress",
+    "Revision",
+    "For Review",
+    "Completed",
+  ]; // FIXED
 
   const { data, error } = await supabase
     .from("requests")
@@ -572,6 +577,7 @@ export async function fetchMyTasks(designerId) {
       `
       request_id, 
       title, 
+      description,
       category, 
       deadline, 
       status, 

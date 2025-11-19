@@ -16,10 +16,8 @@ const RequestPreviewModal = ({ request, onClose }) => {
     }
   );
 
-  const requesterName =
-    request.requester_info && request.requester_info.length > 0
-      ? request.requester_info[0].full_name
-      : "N/A";
+  const requesterName = request.requester ? request.requester.full_name : "N/A";
+  console.log("Request in Preview Modal:", request);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-70">

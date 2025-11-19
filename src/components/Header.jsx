@@ -65,9 +65,9 @@ const Header = ({ title }) => {
             </span>
           )}
         </button>
-        <button className="text-gray-500 hover:text-purple-600 transition-colors">
+        {/* <button className="text-gray-500 hover:text-purple-600 transition-colors">
           <Settings className="w-6 h-6" />
-        </button>
+        </button> */}
 
         <button
           onClick={handleLogout}
