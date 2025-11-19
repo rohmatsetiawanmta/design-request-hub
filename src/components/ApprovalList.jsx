@@ -3,10 +3,12 @@ import {
   fetchRequestsForApproval,
   updateRequest,
   fetchDesigners,
+  autoAssignDesigner,
 } from "../supabaseClient";
 import { Check, X, Eye, UserCheck } from "lucide-react";
 import RequestPreviewModal from "./RequestPreviewModal";
-import AssignDesignerModal from "./AssignDesignerModal"; // <-- Import Komponen yang Dipisah
+import AssignDesignerModal from "./AssignDesignerModal";
+import AssignmentChoiceModal from "./AssignmentChoiceModal";
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -36,6 +38,8 @@ const ApprovalList = () => {
   const [selectedRequestToPreview, setSelectedRequestToPreview] =
     useState(null);
   const [requestToAssign, setRequestToAssign] = useState(null);
+  const [requestToChooseAssignment, setRequestToChooseAssignment] =
+    useState(null);
 
   const loadRequests = async () => {
     setLoading(true);
@@ -60,19 +64,56 @@ const ApprovalList = () => {
     loadRequests();
   }, []);
 
-  // --- FUNGSI UC-06: Menangani Penugasan Final (Logika Inti Tetap di Parent) ---
+  const handleManualAssignMethod = (req) => {
+    setRequestToChooseAssignment(null);
+    setRequestToAssign(req);
+  };
+
+  const handleAutoAssignMethod = async (requestId) => {
+    setRequestToChooseAssignment(null);
+    setProcessingId(requestId);
+    setInfoMsg(null);
+    setError(null);
+    const req = requests.find((r) => r.request_id === requestId);
+    if (!req) {
+      setError("Permintaan tidak ditemukan.");
+      setProcessingId(null);
+      return;
+    }
+
+    try {
+      const autoAssignResult = await autoAssignDesigner(requestId);
+
+      if (autoAssignResult.success) {
+        setInfoMsg(autoAssignResult.message);
+      } else {
+        setInfoMsg(autoAssignResult.message);
+        setRequestToAssign(req);
+      }
+      loadRequests();
+    } catch (error) {
+      console.error("Gagal melakukan auto-assign:", error);
+      setError(
+        `Gagal memproses persetujuan otomatis. ${
+          error.message || error.toString()
+        }`
+      );
+      loadRequests();
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleAssignment = async (requestId, designerId) => {
     setProcessingId(requestId);
     setRequestToAssign(null);
 
     try {
-      // 1. Update status menjadi Approved & designer_id (FR-05, FR-06)
       await updateRequest(requestId, {
         status: "Approved",
         designer_id: designerId,
       });
 
-      // 2. Notifikasi (FR-16 - client side only)
       const assignedDesigner =
         designers.find((d) => d.id === designerId)?.full_name || "Desainer";
       setInfoMsg(
@@ -88,18 +129,15 @@ const ApprovalList = () => {
     }
   };
 
-  // --- FUNGSI UC-05: Menangani Aksi Approve/Revision ---
   const handleAction = async (requestId, actionType) => {
     if (actionType === "approve") {
-      // Memicu modal penugasan (UC-06)
       const req = requests.find((r) => r.request_id === requestId);
       if (req) {
-        setRequestToAssign(req);
+        setRequestToChooseAssignment(req);
       }
       return;
     }
 
-    // Alur untuk Rejected (sebelumnya Revision)
     setProcessingId(requestId);
     setInfoMsg(null);
     if (
@@ -112,7 +150,6 @@ const ApprovalList = () => {
     }
 
     try {
-      // Update status menjadi Rejected
       await updateRequest(requestId, { status: "Rejected" });
       setInfoMsg(
         "Permintaan DITOLAK (Rejected). Requester harus memperbaiki brief."
@@ -200,7 +237,6 @@ const ApprovalList = () => {
                     <div className="text-xs text-gray-500">{req.category}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {/* Mengakses array hasil join dengan alias 'requester_info' */}
                     {req.requester_info ? req.requester_info.full_name : "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -244,7 +280,6 @@ const ApprovalList = () => {
         </div>
       )}
 
-      {/* MODAL PREVIEW */}
       {selectedRequestToPreview && (
         <RequestPreviewModal
           request={selectedRequestToPreview}
@@ -252,7 +287,16 @@ const ApprovalList = () => {
         />
       )}
 
-      {/* MODAL PENUGASAN (UC-06) */}
+      {requestToChooseAssignment && (
+        <AssignmentChoiceModal
+          request={requestToChooseAssignment}
+          loading={processingId === requestToChooseAssignment.request_id}
+          onClose={() => setRequestToChooseAssignment(null)}
+          onChooseAuto={handleAutoAssignMethod}
+          onChooseManual={handleManualAssignMethod}
+        />
+      )}
+
       {requestToAssign && (
         <AssignDesignerModal
           request={requestToAssign}

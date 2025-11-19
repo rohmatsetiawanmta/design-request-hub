@@ -106,7 +106,6 @@ export async function fetchApproverRecipients() {
   return data.map((user) => user.id);
 }
 
-// FUNGSI BARU: Mencatat notifikasi ke tabel 'notifications' (UC-15 Helper)
 export async function sendNotification(requestId, eventType, message, userIds) {
   if (!userIds || userIds.length === 0) {
     console.warn("sendNotification: No recipients specified.");
@@ -343,7 +342,8 @@ export async function fetchDesigners() {
   const { data, error } = await supabase
     .from("users")
     .select("id, full_name")
-    .eq("role", "DESIGNER");
+    .eq("role", "DESIGNER")
+    .eq("is_active", true); // <--- FILTER BARU: HANYA DESAINER AKTIF
 
   if (error) {
     throw error;
@@ -692,12 +692,11 @@ export async function markNotificationsAsRead(userId, notificationIds) {
     }
   }
 
-  // Fallback untuk notifikasi personal (atau jika 'Mark All' dijalankan)
   const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .in("id", notificationIds)
-    .eq("user_id", userId); // Pastikan hanya pengguna sendiri yang dapat menandai
+    .eq("user_id", userId);
 
   if (error) {
     throw error;
@@ -705,11 +704,6 @@ export async function markNotificationsAsRead(userId, notificationIds) {
   return true;
 }
 
-// --------------------------------------------------------------------
-// >>> FUNGSI BARU UNTUK BADGE SIDEBAR <<<
-// --------------------------------------------------------------------
-
-// 1. Menghitung Request yang Menunggu Persetujuan (Daftar Persetujuan)
 export async function fetchSubmittedRequestCount() {
   const { count, error } = await supabase
     .from("requests")
@@ -723,7 +717,6 @@ export async function fetchSubmittedRequestCount() {
   return count;
 }
 
-// 2. Menghitung Tugas Aktif untuk Designer (Tugas Saya)
 export async function fetchMyTaskCount(userId) {
   const activeStatuses = ["Approved", "Revision"];
 
@@ -740,7 +733,6 @@ export async function fetchMyTaskCount(userId) {
   return count;
 }
 
-// 3. Menghitung Request yang Menunggu Review dari Requester (Daftar Permintaan Saya)
 export async function fetchMyReviewCount(userId) {
   const reviewStatus = "For Review";
 
@@ -755,4 +747,141 @@ export async function fetchMyReviewCount(userId) {
     return 0;
   }
   return count;
+}
+
+export async function fetchActiveDesigners() {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name, role")
+    .eq("role", "DESIGNER")
+    .eq("is_active", true);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function autoAssignDesigner(requestId) {
+  const activeDesigners = await fetchDesigners();
+
+  if (activeDesigners.length === 0) {
+    return {
+      success: false,
+      message:
+        "Tidak ada desainer aktif yang tersedia. Mohon lakukan penugasan manual.",
+    };
+  }
+
+  let designerWorkloads = [];
+  for (const designer of activeDesigners) {
+    const workload = await fetchMyTaskCount(designer.id);
+    designerWorkloads.push({
+      id: designer.id,
+      full_name: designer.full_name,
+      workload: workload,
+    });
+  }
+
+  designerWorkloads.sort((a, b) => a.workload - b.workload);
+
+  const bestDesigner = designerWorkloads[0];
+
+  try {
+    const updates = {
+      status: "Approved",
+      designer_id: bestDesigner.id,
+    };
+
+    await updateRequest(requestId, updates);
+
+    return {
+      success: true,
+      designer_id: bestDesigner.id,
+      designer_name: bestDesigner.full_name,
+      message: `Permintaan berhasil disetujui dan ditugaskan otomatis ke ${bestDesigner.full_name}.`,
+    };
+  } catch (error) {
+    console.error("Gagal melakukan auto-assign:", error);
+    return {
+      success: false,
+      message: `Gagal menyimpan penugasan otomatis ke database: ${error.message}. Mohon lakukan penugasan manual.`,
+    };
+  }
+}
+
+export async function reassignDesigner(
+  requestId,
+  newDesignerId,
+  oldDesignerId
+) {
+  const updates = {
+    designer_id: newDesignerId,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: request, error: updateError } = await supabase
+    .from("requests")
+    .update(updates)
+    .eq("request_id", requestId)
+    .select(
+      `
+            request_id, title, status, requester_id, 
+            requester:users!requester_id(id)
+        `
+    )
+    .single();
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  if (oldDesignerId && oldDesignerId !== newDesignerId) {
+    const messageOld = `Anda tidak lagi ditugaskan untuk "${request.title}". Tugas dialihkan.`;
+    await sendNotification(request.request_id, "REASSIGNMENT_OUT", messageOld, [
+      oldDesignerId,
+    ]);
+  }
+
+  const messageNew = `Anda telah ditugaskan untuk "${request.title}". Silakan cek Tugas Saya.`;
+  await sendNotification(request.request_id, "REASSIGNMENT_IN", messageNew, [
+    newDesignerId,
+  ]);
+
+  const messageReq = `Tugas "${request.title}" telah ditugaskan ke designer baru.`;
+  await sendNotification(
+    request.request_id,
+    "REQUEST_ASSIGNED_UPDATE",
+    messageReq,
+    [request.requester_id]
+  );
+
+  return request;
+}
+
+export async function fetchActiveTasksForReassign() {
+  const activeStatuses = ["Approved", "In Progress", "Revision"];
+
+  const { data, error } = await supabase
+    .from("requests")
+    .select(
+      `
+      request_id,
+      title,
+      category,
+      deadline,
+      status,
+      designer_id,
+      designer:users!designer_id(full_name, id),
+      requester:users!requester_id(full_name)
+    `
+    )
+    .in("status", activeStatuses)
+    .order("deadline", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching active tasks for reassign:", error);
+    throw error;
+  }
+  return data;
 }

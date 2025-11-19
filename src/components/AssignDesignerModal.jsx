@@ -1,10 +1,6 @@
 import React, { useState } from "react";
 import { UserCheck } from "lucide-react";
 
-/**
- * Modal untuk memilih dan menugaskan Designer ke Request yang sudah di-Approved.
- * (UC-06: Assign Designer)
- */
 const AssignDesignerModal = ({
   request,
   designers,
@@ -14,15 +10,23 @@ const AssignDesignerModal = ({
 }) => {
   const [selectedDesignerId, setSelectedDesignerId] = useState("");
 
-  // Mengakses Requester (prop request harus memiliki requester_info yang valid)
+  const oldDesignerId = request.designer_id;
+  const isReassignment = !!oldDesignerId;
+
   const requesterName = request.requester_info
     ? request.requester_info.full_name
     : "N/A";
 
   const handleConfirm = () => {
     if (selectedDesignerId) {
-      // Memicu fungsi penugasan utama di ApprovalList
-      onAssign(request.request_id, selectedDesignerId);
+      if (isReassignment && selectedDesignerId === oldDesignerId) {
+        alert(
+          "Silakan pilih Desainer baru. Desainer yang dipilih sama dengan yang lama."
+        );
+        return;
+      }
+
+      onAssign(request.request_id, selectedDesignerId, oldDesignerId);
     } else {
       alert("Harap pilih Desainer sebelum menugaskan.");
     }
@@ -31,14 +35,23 @@ const AssignDesignerModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-70">
       <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
-        <h3 className="text-xl font-bold mb-4">Tugaskan Desainer</h3>
+        <h3 className="text-xl font-bold mb-4">
+          {isReassignment ? "Tugaskan Ulang Desainer" : "Tugaskan Desainer"}
+        </h3>
         <p className="mb-2 text-sm text-gray-700">
           Permintaan: <strong>{request.title}</strong>
         </p>
+        {isReassignment && (
+          <p className="mb-1 text-xs text-red-500">
+            Ditugaskan saat ini:{" "}
+            {designers.find((d) => d.id === oldDesignerId)?.full_name || "N/A"}
+          </p>
+        )}
         <p className="mb-4 text-xs text-gray-500">Requester: {requesterName}</p>
 
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Pilih Desainer <span className="text-red-500">*</span>
+          Pilih Desainer {isReassignment ? "Baru" : ""}{" "}
+          <span className="text-red-500">*</span>
         </label>
         <select
           value={selectedDesignerId}
@@ -67,7 +80,11 @@ const AssignDesignerModal = ({
             disabled={loading || !selectedDesignerId}
             className="px-4 py-2 text-sm rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
           >
-            {loading ? "Menugaskan..." : "Tugaskan & Approve"}
+            {loading
+              ? "Memproses..."
+              : isReassignment
+              ? "Tugaskan Ulang"
+              : "Tugaskan & Approve"}
           </button>
         </div>
       </div>

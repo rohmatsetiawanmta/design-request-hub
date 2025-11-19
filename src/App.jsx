@@ -1,6 +1,6 @@
 // src/App.jsx (REFACTORED)
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 
 import Sidebar from "./components/Sidebar";
@@ -14,6 +14,7 @@ import ApprovalList from "./components/ApprovalList";
 import MyTasks from "./components/MyTasks";
 import UserManagement from "./components/UserManagement";
 import AuditLogViewer from "./components/AuditLogViewer";
+import ReassignManagement from "./components/ReassignManagement";
 
 const InactiveAccountScreen = () => (
   <div className="p-20 text-center bg-white rounded-xl shadow-2xl border-4 border-red-300">
@@ -34,6 +35,12 @@ const App = () => {
   const { session, loading, userProfile } = useAuth();
   const [activeMenu, setActiveMenu] = useState("Dashboard");
 
+  useEffect(() => {
+    if (session) {
+      setActiveMenu("Dashboard");
+    }
+  }, [session]);
+
   if (loading) {
     return null;
   }
@@ -52,6 +59,8 @@ const App = () => {
     ? "Daftar Permintaan Saya"
     : activeMenu.includes("Persetujuan")
     ? "Daftar Persetujuan"
+    : activeMenu.includes("Tugas Aktif")
+    ? "Kelola Tugas Aktif Desainer"
     : activeMenu;
 
   return (
@@ -71,26 +80,20 @@ const App = () => {
           ) : (
             <>
               {activeMenu === "Dashboard" && <DashboardContent />}
-
               {activeMenu === "Laporan & Analisis" && <FullReportContent />}
-
               {activeMenu === "Buat Permintaan Baru" && <CreateRequestForm />}
-
               {activeMenu === "Daftar Permintaan Saya" && <MyRequests />}
-
               {activeMenu === "Daftar Persetujuan" && <ApprovalList />}
-
+              {activeMenu === "Kelola Tugas Aktif" && <ReassignManagement />}
               {activeMenu === "Tugas Saya" && <MyTasks />}
-
               {activeMenu === "Kelola Pengguna" && <UserManagement />}
-
               {activeMenu === "Log Audit" && <AuditLogViewer />}
-
               {activeMenu !== "Dashboard" &&
                 activeMenu !== "Laporan & Analisis" &&
                 activeMenu !== "Buat Permintaan Baru" &&
                 activeMenu !== "Daftar Permintaan Saya" &&
                 activeMenu !== "Daftar Persetujuan" &&
+                activeMenu !== "Kelola Tugas Aktif" &&
                 activeMenu !== "Tugas Saya" &&
                 activeMenu !== "Kelola Pengguna" &&
                 activeMenu !== "Log Audit" && (

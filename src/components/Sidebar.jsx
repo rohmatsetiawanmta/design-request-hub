@@ -52,10 +52,15 @@ const menuGroups = [
   },
   {
     title: "Workflow & Tugas",
-    allowedRoles: ["DESIGNER", "PRODUCER", "ADMIN"],
+    allowedRoles: ["DESIGNER"],
+    items: [{ name: "Tugas Saya", icon: "ClipboardList" }],
+  },
+  {
+    title: "Workflow & Tugas",
+    allowedRoles: ["PRODUCER", "ADMIN"],
     items: [
-      { name: "Tugas Saya", icon: "ClipboardList" },
       { name: "Daftar Persetujuan", icon: "CheckSquare" },
+      { name: "Kelola Tugas Aktif", icon: "ListOrdered" },
     ],
   },
   {
