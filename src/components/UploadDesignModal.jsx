@@ -1,9 +1,5 @@
 import React, { useState } from "react";
-import {
-  uploadDesignAsset,
-  updateRequest,
-  runAIQC, // <-- IMPORT BARU: Pemicu QC AI
-} from "../supabaseClient";
+import { uploadDesignAsset, updateRequest, runAIQC } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import { X } from "lucide-react";
 
@@ -39,7 +35,6 @@ const UploadDesignModal = ({ task, onClose, onSuccess }) => {
 
       const newStatus = "For Review";
 
-      // 1. UPDATE REQUEST STATUS DAN URL
       await updateRequest(task.request_id, {
         status: newStatus,
         latest_design_url: fileUrl,
@@ -59,10 +54,12 @@ const UploadDesignModal = ({ task, onClose, onSuccess }) => {
         isRevision ? "revisi ke-" + newVersionNo : "awal"
       } berhasil diunggah. Status diubah menjadi 'For Review'.`;
 
-      if (aiReport.issue_count > 0) {
+      if (aiReport && aiReport.issue_count > 0) {
         successMessage += ` Peringatan: QC Otomatis menemukan ${aiReport.issue_count} potensi isu (Ejaan/CV). Reviewer akan meninjau.`;
+      } else if (aiReport) {
+        successMessage += ` QC Otomatis bersih (0 Isu terdeteksi).`;
       } else {
-        successMessage += ` QC Otomatis bersih.`;
+        successMessage += ` Peringatan: QC Otomatis sedang diproses atau gagal di server. Reviewer harus melakukan tinjauan manual.`;
       }
 
       onSuccess(successMessage);
@@ -72,7 +69,7 @@ const UploadDesignModal = ({ task, onClose, onSuccess }) => {
       setErrorMsg(
         `Gagal mengunggah: ${
           error.message ||
-          "Pastikan Anda memiliki akses ke bucket 'design-assets'."
+          "Pastikan Anda memiliki akses ke bucket 'design-assets' dan Edge Function 'qc-ai-processor' berfungsi."
         }`
       );
     } finally {

@@ -293,13 +293,9 @@ export async function submitReviewAndChangeStatus(
     await sendNotification(data.request_id, eventType, message, recipients);
   }
 
-  const finalDesignUrl = data.latest_design_url;
-  if (newStatus === "Completed" && finalDesignUrl) {
-    await archiveDesign(data.request_id, finalDesignUrl);
-  }
-
   return data;
 }
+
 export async function archiveDesign(requestId, finalDesignUrl) {
   const { error } = await supabase.from("archive").insert({
     request_id: requestId,
@@ -436,58 +432,28 @@ export async function runAIQC(
   description,
   isRevision
 ) {
-  const textToAnalyze = `${title} ${description || ""}`.toLowerCase();
-
-  const hasError = Math.random() < 0.6;
-
-  let findings = {
-    ocr_text: `Simulasi OCR: Ditemukan teks utama dari brief dan beberapa kata di desain: ${textToAnalyze.slice(
-      0,
-      50
-    )}...`,
-    nlp_findings: [],
-    cv_diff_ref: "NONE",
-    issue_count: 0,
-    is_revision: isRevision,
-  };
-
-  if (hasError) {
-    const numIssues = Math.floor(Math.random() * 3) + 1;
-    for (let i = 0; i < numIssues; i++) {
-      const issue =
-        SIMULATED_AI_ISSUES[
-          Math.floor(Math.random() * SIMULATED_AI_ISSUES.length)
-        ];
-      if (!findings.nlp_findings.includes(issue)) {
-        findings.nlp_findings.push(issue);
-      }
-    }
-    findings.issue_count = findings.nlp_findings.length;
-
-    if (isRevision) {
-      if (Math.random() < 0.7) {
-        findings.cv_diff_ref = `Perbedaan visual signifikan (85%) terdeteksi antara V${
-          versionNo - 1
-        } dan V${versionNo}.`;
-      } else {
-        findings.cv_diff_ref = `Perbedaan visual minor (10%) terdeteksi antara V${
-          versionNo - 1
-        } dan V${versionNo}.`;
-      }
-    }
-  }
-
-  await saveQCReport({
-    request_id: requestId,
-    version_no: versionNo,
-    ocr_text: findings.ocr_text,
-    nlp_findings: findings.nlp_findings.join("; "),
-    cv_diff_ref: findings.cv_diff_ref,
-    issue_count: findings.issue_count,
-    reviewed_at: new Date().toISOString(),
+  const { data, error } = await supabase.functions.invoke("qc-ai-processor", {
+    method: "POST",
+    body: {
+      requestId,
+      versionNo,
+      title,
+      description,
+      isRevision,
+    },
   });
 
-  return findings;
+  if (error) {
+    throw new Error(`Panggilan Edge Function gagal: ${error.message}`);
+  }
+
+  if (data.error) {
+    throw new Error(
+      data.error.message || "Gagal menjalankan QC AI melalui server."
+    );
+  }
+
+  return data.aiReport;
 }
 
 export async function fetchQCReport(requestId, versionNo) {
