@@ -35,11 +35,11 @@ const App = () => {
   const { session, loading, userProfile } = useAuth();
   const [activeMenu, setActiveMenu] = useState("Dashboard");
 
-  useEffect(() => {
-    if (session) {
-      setActiveMenu("Dashboard");
-    }
-  }, [session]);
+  // useEffect(() => {
+  //   if (session) {
+  //     setActiveMenu("Dashboard");
+  //   }
+  // }, [session]);
 
   if (loading) {
     return null;

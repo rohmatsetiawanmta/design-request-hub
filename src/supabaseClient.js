@@ -429,7 +429,6 @@ const SIMULATED_AI_ISSUES = [
   "EyD: Kurang spasi setelah koma pada judul",
 ];
 
-// FUNGSI BARU: Simulasi menjalankan AI QC (UC-12)
 export async function runAIQC(
   requestId,
   versionNo,
